@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GameMode, Zombie, ZombieType, Target, GameSettings, DirectionalWarning } from '../types';
 import { soundManager } from '../utils/audio';
@@ -107,46 +107,61 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Player Position & Walking Movement
   const walkDistanceRef = useRef<number>(0);
-  const lastStepTimeRef = useRef<number>(0);
-  const motionSpeedRef = useRef<number>(0);
-  const lastHeadingRef = useRef<number | null>(null);
-  const lastHeadingTimeRef = useRef<number>(0);
-  const lastRotationTimeRef = useRef<number>(0);
   const keysPressedRef = useRef<{ [key: string]: boolean }>({});
 
-  // Motion-based Phone Step Detection via Accelerometer (Filters out turning)
-  useEffect(() => {
-    const handleMotion = (e: DeviceMotionEvent) => {
-      const now = performance.now();
-      // Ignore motion if the phone was turned/rotated recently (within last 380ms)
-      if (now - lastRotationTimeRef.current < 380) return;
+  // Virtual Joystick State for Walking Movement
+  const [joystickPos, setJoystickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isJoystickActive, setIsJoystickActive] = useState<boolean>(false);
+  const joystickVectorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const joystickTouchIdRef = useRef<number | null>(null);
+  const joystickOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-      // Extract vertical step impact (Y axis / Z axis vertical bounce when walking)
-      let vertAcc = 0;
-      if (e.acceleration && e.acceleration.y !== null) {
-        const ay = Math.abs(e.acceleration.y || 0);
-        const az = Math.abs(e.acceleration.z || 0);
-        vertAcc = Math.max(ay, az);
-      } else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.y !== null) {
-        const gy = e.accelerationIncludingGravity.y || 0;
-        const gz = e.accelerationIncludingGravity.z || 0;
-        const totalAcc = Math.sqrt(gy * gy + gz * gz);
-        vertAcc = Math.abs(totalAcc - 9.8);
-      }
+  const JOYSTICK_MAX_RADIUS = 40; // Max displacement in pixels
 
-      // High threshold (~2.8 m/s²) to require a distinct physical step or jog in place
-      // Enforce step cadence: minimum 300ms between physical steps
-      if (vertAcc > 2.8 && (now - lastStepTimeRef.current > 300)) {
-        lastStepTimeRef.current = now;
-        motionSpeedRef.current = Math.min(1.2, Math.max(0.8, vertAcc / 3.2));
-      }
+  const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation(); // prevent triggering weapon fire
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    joystickTouchIdRef.current = e.pointerId;
+    joystickOriginRef.current = { x: e.clientX, y: e.clientY };
+    setIsJoystickActive(true);
+    setJoystickPos({ x: 0, y: 0 });
+    joystickVectorRef.current = { x: 0, y: 0 };
+  };
+
+  const handleJoystickPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isJoystickActive || joystickTouchIdRef.current !== e.pointerId) return;
+    e.stopPropagation();
+
+    const dx = e.clientX - joystickOriginRef.current.x;
+    const dy = e.clientY - joystickOriginRef.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    let clampedDx = dx;
+    let clampedDy = dy;
+    if (dist > JOYSTICK_MAX_RADIUS) {
+      clampedDx = (dx / dist) * JOYSTICK_MAX_RADIUS;
+      clampedDy = (dy / dist) * JOYSTICK_MAX_RADIUS;
+    }
+
+    setJoystickPos({ x: clampedDx, y: clampedDy });
+    joystickVectorRef.current = {
+      x: clampedDx / JOYSTICK_MAX_RADIUS,
+      y: clampedDy / JOYSTICK_MAX_RADIUS,
     };
+  };
 
-    window.addEventListener('devicemotion', handleMotion, true);
-    return () => {
-      window.removeEventListener('devicemotion', handleMotion, true);
-    };
-  }, []);
+  const handleJoystickPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (joystickTouchIdRef.current === e.pointerId) {
+      e.stopPropagation();
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      joystickTouchIdRef.current = null;
+      setIsJoystickActive(false);
+      setJoystickPos({ x: 0, y: 0 });
+      joystickVectorRef.current = { x: 0, y: 0 };
+    }
+  };
 
   // Keyboard Movement Event Listeners
   useEffect(() => {
@@ -336,22 +351,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(qRaw);
       const heading = Math.atan2(forwardVec.x, -forwardVec.z);
 
-      const now = performance.now();
-      if (lastHeadingRef.current !== null && lastHeadingTimeRef.current > 0) {
-        const dt = (now - lastHeadingTimeRef.current) / 1000;
-        if (dt > 0.005) {
-          let hDiff = Math.abs(heading - lastHeadingRef.current);
-          if (hDiff > Math.PI) hDiff = Math.PI * 2 - hDiff;
-          const angVel = hDiff / dt;
-          if (angVel > 0.35) {
-            // Turning phone detected -> mark rotation timestamp to suppress walking step triggers
-            lastRotationTimeRef.current = now;
-          }
-        }
-      }
-      lastHeadingRef.current = heading;
-      lastHeadingTimeRef.current = now;
-
       if (initialYawOffsetRef.current === null) {
         initialYawOffsetRef.current = heading;
       }
@@ -369,34 +368,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
   }, [settings.gyroEnabled]);
 
-  // Theme Switching
+  // Theme Switching - All waves are light mode
   useEffect(() => {
-    const isLightWave = mode === 'PLAY' && wave % 2 === 0;
+    const isLightWave = true;
 
     if (envMaterialsRef.current) {
-      envMaterialsRef.current.floor.color.setHex(isLightWave ? 0xdddddd : 0x18181f);
-      envMaterialsRef.current.ceiling.color.setHex(isLightWave ? 0xeeeeee : 0x0c0b10);
-      envMaterialsRef.current.wall.color.setHex(isLightWave ? 0xcccccc : 0x22222a);
-      envMaterialsRef.current.crate.color.setHex(isLightWave ? 0xaaaaaa : 0x3d352e);
+      envMaterialsRef.current.floor.color.setHex(0xdddddd);
+      envMaterialsRef.current.ceiling.color.setHex(0xeeeeee);
+      envMaterialsRef.current.wall.color.setHex(0xcccccc);
+      envMaterialsRef.current.crate.color.setHex(0xaaaaaa);
     }
     
     if (lightsRef.current) {
-      if (isLightWave) {
-        lightsRef.current.ambient.color.setHex(0xffffff);
-        lightsRef.current.ambient.intensity = 1.0;
-        lightsRef.current.emergency.intensity = 0; // turn off red light
-        lightsRef.current.corner1.intensity = 0;
-        lightsRef.current.corner2.intensity = 0;
-      } else {
-        lightsRef.current.ambient.color.setHex(0x221525);
-        lightsRef.current.ambient.intensity = 0.8;
-        lightsRef.current.emergency.intensity = 2.5;
-        lightsRef.current.corner1.intensity = 1.2;
-        lightsRef.current.corner2.intensity = 1.2;
-      }
+      lightsRef.current.ambient.color.setHex(0xffffff);
+      lightsRef.current.ambient.intensity = 1.0;
+      lightsRef.current.emergency.intensity = 0; // turn off red light
+      lightsRef.current.corner1.intensity = 0;
+      lightsRef.current.corner2.intensity = 0;
     }
     if (flashlightRef.current) {
-      flashlightRef.current.visible = !isLightWave;
+      flashlightRef.current.visible = false;
     }
   }, [wave, mode]);
 
@@ -516,7 +507,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // --- ZOMBIE 3D MODEL GENERATOR ---
   const createZombieMesh = (zombie: Zombie): THREE.Group => {
-    const isLightWave = mode === 'PLAY' && wave % 2 === 0;
+    const isLightWave = true; // All waves in light mode
     const group = new THREE.Group();
 
     // Color Bug Fix:
@@ -957,9 +948,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (hasGyroSensorRef.current && settings.gyroEnabled) return;
 
     if (e.buttons === 1 || e.pointerType === 'mouse') {
-      if (Math.abs(e.movementX) > 1.5 || Math.abs(e.movementY) > 1.5) {
-        lastRotationTimeRef.current = performance.now();
-      }
       const sens = (settings.sensitivity || 1.2) * 0.003;
       yawRef.current -= e.movementX * sens;
       pitchRef.current -= e.movementY * sens;
@@ -1003,27 +991,28 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         camera.quaternion.setFromEuler(euler);
       }
 
-      // 1.5 PLAYER WALKING MOVEMENT (Automatic Phone Motion Sensor + WASD Fallback)
-      const now = performance.now();
-      // Discrete step duration: 220ms window per physical step (~0.45m step distance)
-      const isStepActive = (now - lastStepTimeRef.current < 220);
+      // 1.5 PLAYER WALKING MOVEMENT (Virtual Joystick + WASD / Arrow Keys)
+      const jx = joystickVectorRef.current.x; // [-1, 1]
+      const jy = joystickVectorRef.current.y; // [-1, 1]
+
       const moveFwdKey = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'];
       const moveBackKey = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
       const moveLeftKey = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
       const moveRightKey = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
 
-      let fwdInput = 0;
-      if (moveFwdKey || isStepActive) fwdInput += 1;
+      let fwdInput = -jy; // Pushing joystick up (jy < 0) yields positive forward input
+      if (moveFwdKey) fwdInput += 1;
       if (moveBackKey) fwdInput -= 1;
 
-      let strafeInput = 0;
+      let strafeInput = jx;
       if (moveRightKey) strafeInput += 1;
       if (moveLeftKey) strafeInput -= 1;
 
-      if (fwdInput !== 0 || strafeInput !== 0) {
-        // Calibrated step speed: 2.2 m/s during step impulse (~0.48m per step); keyboard = 3.5 m/s
-        const currentSpeed = isStepActive && !moveFwdKey ? 2.2 * (motionSpeedRef.current || 1.0) : 3.5;
+      fwdInput = THREE.MathUtils.clamp(fwdInput, -1, 1);
+      strafeInput = THREE.MathUtils.clamp(strafeInput, -1, 1);
 
+      if (Math.abs(fwdInput) > 0.05 || Math.abs(strafeInput) > 0.05) {
+        const moveSpeed = 3.8;
         const forwardDir = new THREE.Vector3();
         camera.getWorldDirection(forwardDir);
         forwardDir.y = 0;
@@ -1033,17 +1022,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const moveVec = new THREE.Vector3()
           .addScaledVector(forwardDir, fwdInput)
-          .addScaledVector(rightDir, strafeInput)
-          .normalize();
+          .addScaledVector(rightDir, strafeInput);
 
-        camera.position.addScaledVector(moveVec, currentSpeed * delta);
+        if (moveVec.length() > 1) moveVec.normalize();
+
+        camera.position.addScaledVector(moveVec, moveSpeed * delta);
 
         // Natural head bobbing while walking
-        walkDistanceRef.current += delta * currentSpeed;
+        walkDistanceRef.current += delta * moveSpeed * moveVec.length();
         const headBob = Math.sin(walkDistanceRef.current * 10) * 0.04;
         camera.position.y = 1.6 + headBob;
 
-        // Keep player strictly inside the 3D room boundaries
+        // Keep player strictly inside room boundaries
         camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
       } else {
@@ -1231,6 +1221,36 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
         </div>
       </div>
+
+      {/* VIRTUAL JOYSTICK (BOTTOM LEFT) */}
+      {!isPaused && (
+        <div
+          className="absolute bottom-6 left-6 z-30 pointer-events-auto touch-none select-none flex items-center justify-center p-2"
+          onPointerDown={handleJoystickPointerDown}
+          onPointerMove={handleJoystickPointerMove}
+          onPointerUp={handleJoystickPointerUp}
+          onPointerCancel={handleJoystickPointerUp}
+        >
+          {/* Joystick Base Outer Ring */}
+          <div className={`relative w-28 h-28 rounded-full border-2 ${isJoystickActive ? 'border-[#ff3300] bg-black/80 shadow-[0_0_20px_rgba(255,51,0,0.4)]' : 'border-white/40 bg-black/60'} backdrop-blur-md flex items-center justify-center shadow-2xl transition-colors`}>
+            {/* Direction Arrow Helpers */}
+            <div className="absolute top-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▲</div>
+            <div className="absolute bottom-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▼</div>
+            <div className="absolute left-1.5 text-[9px] text-white/50 font-mono pointer-events-none">◄</div>
+            <div className="absolute right-1.5 text-[9px] text-white/50 font-mono pointer-events-none">►</div>
+            
+            {/* Draggable Knob */}
+            <div
+              className={`w-12 h-12 rounded-full ${isJoystickActive ? 'bg-[#ff3300] shadow-[0_0_15px_#ff3300]' : 'bg-white/90'} border-2 border-white transition-transform duration-75 ease-out flex items-center justify-center pointer-events-none`}
+              style={{
+                transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)`,
+              }}
+            >
+              <div className="w-3.5 h-3.5 rounded-full bg-black/60" />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
