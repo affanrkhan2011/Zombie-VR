@@ -229,13 +229,32 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (!settings.gyroEnabled) return;
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
-      if (e.gamma !== null && e.beta !== null) {
-        // Simple gyro mapping for mobile VR-like look
-        const alpha = e.alpha || 0; // Yaw 0-360
-        const beta = e.beta || 0;   // Pitch -180-180
+      if (e.alpha !== null || e.beta !== null || e.gamma !== null) {
+        const alpha = e.alpha || 0; // 0-360 compass/yaw
+        const beta = e.beta || 0;   // -180 to 180 pitch
+        const gamma = e.gamma || 0; // -90 to 90 roll
 
-        yawRef.current = THREE.MathUtils.degToRad(-alpha);
-        pitchRef.current = THREE.MathUtils.degToRad(beta - 45); // offset comfort angle
+        const screenOrientation = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
+
+        let radYaw = 0;
+        let radPitch = 0;
+
+        if (screenOrientation === 90) {
+          // Landscape Left
+          radYaw = THREE.MathUtils.degToRad(-beta);
+          radPitch = THREE.MathUtils.degToRad(-gamma);
+        } else if (screenOrientation === -90 || screenOrientation === 270) {
+          // Landscape Right
+          radYaw = THREE.MathUtils.degToRad(beta);
+          radPitch = THREE.MathUtils.degToRad(gamma);
+        } else {
+          // Portrait mode
+          radYaw = THREE.MathUtils.degToRad(-alpha);
+          radPitch = THREE.MathUtils.degToRad(beta - 45);
+        }
+
+        yawRef.current = radYaw;
+        pitchRef.current = THREE.MathUtils.clamp(radPitch, -Math.PI / 2.2, Math.PI / 2.2);
       }
     };
 

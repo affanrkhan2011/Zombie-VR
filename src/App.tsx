@@ -22,7 +22,7 @@ export default function App() {
 
   const [settings, setSettings] = useState<GameSettings>({
     soundEnabled: true,
-    gyroEnabled: false,
+    gyroEnabled: true,
     sensitivity: 1.2,
     flashlightOn: true,
     vrStereoMode: false,
@@ -42,8 +42,25 @@ export default function App() {
     return parseInt(localStorage.getItem('zombie_max_wave') || '1', 10);
   });
 
+  const requestGyroPermission = async () => {
+    if (
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
+    ) {
+      try {
+        const state = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
+        if (state === 'granted') {
+          setSettings(prev => ({ ...prev, gyroEnabled: true }));
+        }
+      } catch (err) {
+        console.warn('Gyro permission error:', err);
+      }
+    }
+  };
+
   // Start Game Mode
   const handleStartGame = (selectedMode: GameMode) => {
+    requestGyroPermission();
     setMode(selectedMode);
     setIsPaused(false);
     setWaveBonusMessage(null);
