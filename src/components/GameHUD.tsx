@@ -82,18 +82,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       )}
 
       {/* TOP BAR HUD */}
-      <div className="flex items-center justify-between w-full pointer-events-auto gap-2">
+      <div className="flex items-start justify-between w-full pointer-events-auto gap-2">
         {/* PLAYER HEALTH BAR */}
-        <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-red-900/60 rounded-xl p-2 px-3 shadow-lg max-w-[220px] sm:max-w-xs w-full">
-          <Shield className={`w-6 h-6 ${stats.hp <= 30 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
+        <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-red-900/60 rounded-xl p-2 shadow-lg min-w-[140px] sm:min-w-[200px]">
+          <Shield className={`w-6 h-6 sm:w-8 sm:h-8 ${stats.hp <= 30 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
           <div className="flex-1">
-            <div className="flex justify-between items-center text-xs font-bold mb-1">
-              <span className="text-red-400 tracking-wider">HEALTH</span>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold mb-1">
+              <span className="text-red-400 tracking-wider hidden sm:inline">HEALTH</span>
               <span className={`font-mono ${stats.hp <= 30 ? 'text-red-500 font-extrabold' : 'text-gray-200'}`}>
-                {stats.hp} / {stats.maxHp} HP
+                {stats.hp}
               </span>
             </div>
-            <div className="w-full bg-gray-900 h-2.5 rounded-full overflow-hidden border border-red-950">
+            <div className="w-full bg-gray-900 h-2 sm:h-2.5 rounded-full overflow-hidden border border-red-950">
               <div
                 className={`h-full transition-all duration-300 ${
                   stats.hp > 75 ? 'bg-gradient-to-r from-emerald-500 to-green-400' : stats.hp > 30 ? 'bg-amber-500' : 'bg-red-600 animate-pulse'
@@ -106,25 +106,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         {/* MODE STATS BADGES */}
         {mode === 'PLAY' ? (
-          <div className="flex items-center gap-2">
-            <div className="bg-red-950/90 border border-red-700/60 px-3 py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] text-red-400 uppercase font-extrabold">WAVE</div>
-              <div className="text-lg font-black text-white font-mono">{stats.wave}</div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <div className="bg-red-950/90 border border-red-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
+              <div className="text-[9px] sm:text-[10px] text-red-400 uppercase font-extrabold hidden sm:block">WAVE</div>
+              <div className="text-base sm:text-lg font-black text-white font-mono">{stats.wave}</div>
             </div>
-            <div className="bg-zinc-900/90 border border-zinc-700/60 px-3 py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] text-gray-400 uppercase font-extrabold">KILLS</div>
-              <div className="text-lg font-black text-red-500 font-mono">{stats.kills}</div>
+            <div className="bg-zinc-900/90 border border-zinc-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
+              <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-extrabold hidden sm:block">KILLS</div>
+              <div className="text-base sm:text-lg font-black text-red-500 font-mono">{stats.kills}</div>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <div className="bg-amber-950/90 border border-amber-600/60 px-3 py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] text-amber-400 uppercase font-extrabold">SCORE</div>
-              <div className="text-lg font-black text-amber-200 font-mono">{stats.practiceScore}</div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <div className="bg-amber-950/90 border border-amber-600/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
+              <div className="text-[9px] sm:text-[10px] text-amber-400 uppercase font-extrabold hidden sm:block">SCORE</div>
+              <div className="text-base sm:text-lg font-black text-amber-200 font-mono">{stats.practiceScore}</div>
             </div>
-            <div className="bg-zinc-900/90 border border-zinc-700/60 px-3 py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm">
-              <div className="text-[10px] text-gray-400 uppercase font-extrabold">TARGETS</div>
-              <div className="text-lg font-black text-emerald-400 font-mono">{stats.practiceTargetsHit}</div>
+            <div className="bg-zinc-900/90 border border-zinc-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
+              <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-extrabold hidden sm:block">HITS</div>
+              <div className="text-base sm:text-lg font-black text-emerald-400 font-mono">{stats.practiceTargetsHit}</div>
             </div>
           </div>
         )}
@@ -134,18 +134,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {onRecenterGyro && (
             <button
               onClick={onRecenterGyro}
-              className="px-2.5 py-1.5 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-600/80 text-red-300 font-extrabold text-xs flex items-center gap-1 transition shadow-lg active:scale-95"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-600/80 text-red-300 transition shadow-lg active:scale-95 flex items-center justify-center min-w-[44px] min-h-[44px]"
               title="Re-Center Gyro Aim"
             >
-              <Crosshair className="w-4 h-4 text-red-400" />
-              <span className="hidden sm:inline">CENTER AIM</span>
+              <Crosshair className="w-5 h-5 sm:w-4 sm:h-4 text-red-400" />
             </button>
           )}
 
           {mode === 'PRACTICE' && onResetPracticeTargets && (
             <button
               onClick={onResetPracticeTargets}
-              className="p-2 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-600 text-gray-200 transition"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-600 text-gray-200 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
               title="Reset Practice Targets"
             >
               <RefreshCw className="w-5 h-5" />

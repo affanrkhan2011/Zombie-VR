@@ -677,6 +677,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
+  const finalizeZombieRemoval = (zId: string) => {
+    removeZombieMesh(zId);
+    const idx = zombiesRef.current.findIndex(z => z.id === zId);
+    if (idx !== -1) {
+      zombiesRef.current.splice(idx, 1);
+      killedWaveZombiesRef.current++;
+    }
+    if (
+      killedWaveZombiesRef.current >= totalWaveZombiesRef.current &&
+      zombiesRef.current.length === 0
+    ) {
+      soundManager.playWaveComplete();
+      onWaveClear();
+    }
+  };
+
   // --- SHOOTING MECHANIC ---
   const handleShoot = () => {
     if (isPaused || !cameraRef.current || !sceneRef.current) return;
@@ -742,20 +758,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           if (z.health <= 0) {
             // Zombie Killed!
             createExplosionParticles(hitPoint, '#ff1100', 35);
-            removeZombieMesh(z.id);
-            zombiesRef.current.splice(zIndex, 1);
-            killedWaveZombiesRef.current++;
-
             onZombieKill(z.id, isHeadshot);
-
-            // Check wave completion
-            if (
-              killedWaveZombiesRef.current >= totalWaveZombiesRef.current &&
-              zombiesRef.current.length === 0
-            ) {
-              soundManager.playWaveComplete();
-              onWaveClear();
-            }
+            finalizeZombieRemoval(z.id);
           }
         }
       }
@@ -902,6 +906,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const playerPos = new THREE.Vector3(0, 0, 0);
         const warnings: DirectionalWarning[] = [];
+        const idsToRemove: string[] = [];
 
         // Update Zombies
         zombiesRef.current.forEach(z => {
@@ -934,11 +939,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             if (rightLeg) rightLeg.rotation.x = -Math.sin(time) * 0.4;
           } else {
             // Zombie reached player (TOUCHED PLAYER)!
-            // Lose 10 HP out of 150!
             if (currentTime - z.attackCooldown > 1200) {
               z.attackCooldown = currentTime;
               soundManager.playZombieAttack();
-              onPlayerHit(z.damage); // 10 HP loss
+              onPlayerHit(z.damage); // take damage
+              
+              // Zombie disappears after attacking
+              createExplosionParticles(meshGroup.position, '#550000', 20); // optional: dark blood explosion
+              idsToRemove.push(z.id);
             }
           }
 
@@ -956,6 +964,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
           warnings.push({ direction: dirName, angle: relAngle, distance: distToPlayer });
         });
+
+        // Process removals for zombies that attacked
+        idsToRemove.forEach(id => finalizeZombieRemoval(id));
 
         onDirectionalUpdate(warnings);
 

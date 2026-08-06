@@ -52,45 +52,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* PLAY MODE CARD */}
         <button
           onClick={() => handleStart('PLAY')}
-          className="group relative w-full bg-gradient-to-r from-red-950/90 via-red-900/80 to-zinc-900 border-2 border-red-600/80 hover:border-red-500 rounded-2xl p-5 text-left transition-all duration-300 hover:scale-[1.02] shadow-[0_0_25px_rgba(185,28,28,0.35)] flex items-center justify-between overflow-hidden"
+          className="group relative w-full bg-gradient-to-r from-red-950/90 via-red-900/80 to-zinc-900 border-2 border-red-600/80 hover:border-red-500 rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 hover:scale-[1.02] shadow-[0_0_25px_rgba(185,28,28,0.35)] flex items-center justify-between overflow-hidden min-h-[110px]"
         >
           <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-red-600/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition"></div>
           <div>
             <div className="flex items-center gap-2 text-xs font-extrabold text-red-400 uppercase tracking-wider mb-1">
-              <ShieldAlert className="w-4 h-4 text-red-500" /> MAIN SURVIVAL
+              <ShieldAlert className="w-4 h-4 text-red-500" /> SURVIVAL
             </div>
-            <div className="text-2xl font-black text-white tracking-wide uppercase flex items-center gap-2">
-              PLAY MODE <Zap className="w-5 h-5 text-amber-400 fill-amber-400" />
-            </div>
-            <div className="text-xs text-gray-300 mt-1 space-y-0.5 font-medium">
-              <div>• Wave Survival with 360° incoming zombies</div>
-              <div>• Start at <span className="text-emerald-400 font-bold">150 HP</span> (Bite = <span className="text-red-400 font-bold">-10 HP</span>)</div>
-              <div>• Gain <span className="text-emerald-400 font-bold">+1 HP per kill</span> & <span className="text-emerald-400 font-bold">+5 HP per wave</span></div>
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-wide uppercase flex items-center gap-2">
+              PLAY MODE <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 fill-amber-400" />
             </div>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-red-600 group-hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
-            <Play className="w-6 h-6 fill-current ml-0.5" />
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-red-600 group-hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
+            <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-current ml-0.5" />
           </div>
         </button>
 
         {/* PRACTICE MODE CARD */}
         <button
           onClick={() => handleStart('PRACTICE')}
-          className="group relative w-full bg-zinc-900/90 hover:bg-zinc-800/90 border-2 border-amber-600/60 hover:border-amber-500 rounded-2xl p-5 text-left transition-all duration-300 hover:scale-[1.02] shadow-xl flex items-center justify-between overflow-hidden"
+          className="group relative w-full bg-zinc-900/90 hover:bg-zinc-800/90 border-2 border-amber-600/60 hover:border-amber-500 rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 hover:scale-[1.02] shadow-xl flex items-center justify-between overflow-hidden min-h-[110px]"
         >
           <div>
             <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-1">
               <Crosshair className="w-4 h-4 text-amber-500" /> TARGET RANGE
             </div>
             <div className="text-2xl font-black text-white tracking-wide uppercase">
-              PRACTICE MODE
-            </div>
-            <div className="text-xs text-gray-300 mt-1 font-medium">
-              Targets placed 360° all around you for aim, reaction & laser testing.
+              PRACTICE
             </div>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-600 group-hover:bg-amber-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
-            <TargetIcon className="w-6 h-6" />
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-600 group-hover:bg-amber-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
+            <TargetIcon className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
         </button>
       </div>
