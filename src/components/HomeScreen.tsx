@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameMode, GameSettings } from '../types';
-import { Play, Coins, Gem } from 'lucide-react';
+import { Play, Coins, Gem, Headphones, Crosshair, Smartphone } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 
 interface HomeScreenProps {
@@ -18,10 +18,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   highScore,
   maxWave,
 }) => {
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  useEffect(() => {
+    const hasSeenInstructions = localStorage.getItem('hasSeenInstructions');
+    if (!hasSeenInstructions) {
+      setShowInstructions(true);
+    }
+  }, []);
+
   const handleStart = () => {
     soundManager.playGunshot();
     // Start game in PLAY mode regardless of VR toggle for now
     onStartGame('PLAY');
+  };
+
+  const closeInstructions = () => {
+    localStorage.setItem('hasSeenInstructions', 'true');
+    setShowInstructions(false);
   };
 
   return (
@@ -75,8 +89,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
 
       {/* --- TOP HEADER / STATUS BAR --- */}
-      <div className="absolute top-0 w-full p-4 flex justify-end items-start z-30 pt-safe">
-        {/* Center: Currency (Hidden on very small screens) */}
+      <div className="absolute top-0 w-full p-4 flex justify-between items-start z-30 pt-safe">
+        {/* Left: How to play */}
+        <button 
+          onClick={() => setShowInstructions(true)}
+          className="flex items-center gap-2 bg-[#0A0A0C]/80 px-3 sm:px-4 py-2 border border-[#CC5200]/40 hover:bg-[#CC5200]/20 hover:text-white transition-colors backdrop-blur-sm"
+        >
+          <span className="font-mono text-xs sm:text-sm text-gray-300 uppercase tracking-wider font-bold">How to Play</span>
+        </button>
+
+        {/* Right: Currency (Hidden on very small screens) */}
         <div className="hidden sm:flex gap-6 bg-[#0D1F12]/80 px-6 py-2 rounded-sm border border-[#CC5200]/20 backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-yellow-500" />
@@ -96,7 +118,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           className="text-[12vw] sm:text-8xl font-display uppercase tracking-widest text-transparent relative drop-shadow-[0_0_15px_rgba(204,82,0,0.8)]"
           style={{ WebkitTextStroke: '2px #CC5200' }}
         >
-          ZOMBIE VR
+          OUTBREAK
         </h1>
         <p className="mt-4 text-xs sm:text-sm font-mono text-gray-400 uppercase tracking-[0.3em] opacity-80">
           Survive The Nightmare
@@ -125,8 +147,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </button>
       </div>
 
+      {/* --- INSTRUCTIONS MODAL --- */}
+      {showInstructions && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm pointer-events-auto">
+          <div className="w-full max-w-sm border border-[#CC5200] bg-[#0A0A0C] p-6 shadow-[0_0_40px_rgba(204,82,0,0.3)]">
+            <h2 className="text-3xl font-display text-[#CC5200] uppercase mb-6 text-center tracking-widest border-b border-zinc-800 pb-4">
+              HOW TO PLAY
+            </h2>
+            
+            <div className="space-y-6 mb-8 text-sm font-mono text-gray-300">
+              <div className="flex items-start gap-4">
+                <Smartphone className="w-6 h-6 text-[#CC5200] shrink-0" />
+                <div>
+                  <div className="text-white font-bold mb-1">LOOK AROUND</div>
+                  <div className="text-gray-400">Move your device or use the on-screen joystick to aim.</div>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <Crosshair className="w-6 h-6 text-[#CC5200] shrink-0" />
+                <div>
+                  <div className="text-white font-bold mb-1">SHOOT</div>
+                  <div className="text-gray-400">Tap anywhere on the screen to fire your weapon.</div>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4 border-t border-zinc-800 pt-6">
+                <Headphones className="w-6 h-6 text-[#CC5200] shrink-0 animate-pulse" />
+                <div>
+                  <div className="text-[#CC5200] font-bold mb-1">HEADPHONES RECOMMENDED</div>
+                  <div className="text-gray-400">Use headphones for 3D spatial audio to hear where zombies are coming from.</div>
+                </div>
+              </div>
+            </div>
 
-
+            <button 
+              onClick={closeInstructions}
+              className="w-full py-4 bg-[#CC5200] text-black font-display text-xl uppercase hover:bg-white transition-colors border border-[#e67300]"
+            >
+              UNDERSTOOD
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
