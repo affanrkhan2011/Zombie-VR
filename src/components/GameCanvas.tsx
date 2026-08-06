@@ -103,33 +103,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const totalWaveZombiesRef = useRef<number>(0);
   const spawnedWaveZombiesRef = useRef<number>(0);
   const killedWaveZombiesRef = useRef<number>(0);
+  const heartbeatTimerRef = useRef<number>(0);
 
   // Player Position & Walking Movement
   const walkDistanceRef = useRef<number>(0);
   const lastStepTimeRef = useRef<number>(0);
-  const isMotionSteppingRef = useRef<boolean>(false);
-  const touchWalkRef = useRef<boolean>(false);
+  const motionSpeedRef = useRef<number>(0);
   const keysPressedRef = useRef<{ [key: string]: boolean }>({});
 
-  // Motion-based Step / Jogging Detection via Accelerometer
+  // Motion-based Phone Movement Detection via Accelerometer
   useEffect(() => {
     const handleMotion = (e: DeviceMotionEvent) => {
-      const acc = e.acceleration || e.accelerationIncludingGravity;
-      if (!acc || acc.x === null || acc.y === null || acc.z === null) return;
+      // Prefer pure acceleration if available, otherwise delta from gravity
+      let mag = 0;
+      if (e.acceleration && e.acceleration.x !== null) {
+        const ax = e.acceleration.x || 0;
+        const ay = e.acceleration.y || 0;
+        const az = e.acceleration.z || 0;
+        mag = Math.sqrt(ax * ax + ay * ay + az * az);
+      } else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.x !== null) {
+        const gx = e.accelerationIncludingGravity.x || 0;
+        const gy = e.accelerationIncludingGravity.y || 0;
+        const gz = e.accelerationIncludingGravity.z || 0;
+        const totalG = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        mag = Math.abs(totalG - 9.8);
+      }
 
-      const x = acc.x || 0;
-      const y = acc.y || 0;
-      const z = acc.z || 0;
-
-      // Calculate total acceleration magnitude delta filtering out static gravity (~9.8)
-      const totalAcc = Math.sqrt(x * x + y * y + z * z);
-      const accDelta = Math.abs(totalAcc - 9.8);
-
-      const now = performance.now();
-      // Step impulse detected when user steps or jogs in place (vertical/forward oscillation > 2.2 m/s²)
-      if (accDelta > 2.2 && now - lastStepTimeRef.current > 200) {
-        lastStepTimeRef.current = now;
-        isMotionSteppingRef.current = true;
+      // If physical phone movement / stepping is detected (threshold ~1.2 m/s²)
+      if (mag > 1.2) {
+        lastStepTimeRef.current = performance.now();
+        // Scale motion speed based on movement vigor (between 0.5x and 1.5x)
+        motionSpeedRef.current = Math.min(1.5, Math.max(0.6, mag / 2.5));
       }
     };
 
@@ -975,24 +979,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         camera.quaternion.setFromEuler(euler);
       }
 
-      // 1.5 PLAYER WALKING MOVEMENT (Motion Step Detection + WASD/Arrows + Touch Hold)
+      // 1.5 PLAYER WALKING MOVEMENT (Automatic Phone Motion Sensor + WASD Fallback)
       const now = performance.now();
-      const isMotionActive = (now - lastStepTimeRef.current < 450);
-      const moveFwd = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'] || touchWalkRef.current || isMotionActive;
-      const moveBack = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
-      const moveLeft = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
-      const moveRight = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
+      const isMotionActive = (now - lastStepTimeRef.current < 550);
+      const moveFwdKey = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'];
+      const moveBackKey = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
+      const moveLeftKey = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
+      const moveRightKey = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
 
       let fwdInput = 0;
-      if (moveFwd) fwdInput += 1;
-      if (moveBack) fwdInput -= 1;
+      if (moveFwdKey || isMotionActive) fwdInput += 1;
+      if (moveBackKey) fwdInput -= 1;
 
       let strafeInput = 0;
-      if (moveRight) strafeInput += 1;
-      if (moveLeft) strafeInput -= 1;
+      if (moveRightKey) strafeInput += 1;
+      if (moveLeftKey) strafeInput -= 1;
 
       if (fwdInput !== 0 || strafeInput !== 0) {
-        const moveSpeed = 3.8;
+        // Base movement speed scaled by phone motion intensity when active
+        const baseSpeed = 3.8;
+        const currentSpeed = isMotionActive ? baseSpeed * (motionSpeedRef.current || 1.0) : baseSpeed;
+
         const forwardDir = new THREE.Vector3();
         camera.getWorldDirection(forwardDir);
         forwardDir.y = 0;
@@ -1005,10 +1012,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           .addScaledVector(rightDir, strafeInput)
           .normalize();
 
-        camera.position.addScaledVector(moveVec, moveSpeed * delta);
+        camera.position.addScaledVector(moveVec, currentSpeed * delta);
 
-        // Simulated head bobbing while walking
-        walkDistanceRef.current += delta * moveSpeed;
+        // Natural head bobbing while walking
+        walkDistanceRef.current += delta * currentSpeed;
         const headBob = Math.sin(walkDistanceRef.current * 10) * 0.04;
         camera.position.y = 1.6 + headBob;
 
@@ -1201,27 +1208,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
       </div>
 
-      {/* HOLD TO WALK TOUCH BUTTON & MOTION WALK CONTROLS */}
-      {!isPaused && (
-        <div className="absolute bottom-6 left-6 z-30 flex items-center gap-3 pointer-events-auto">
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              touchWalkRef.current = true;
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              touchWalkRef.current = false;
-            }}
-            onPointerLeave={() => {
-              touchWalkRef.current = false;
-            }}
-            className="px-6 py-3 bg-black/80 hover:bg-[#ff3300] hover:text-black border-2 border-white/30 text-white font-mono text-sm uppercase tracking-wider transition-colors active:scale-95 shadow-2xl"
-          >
-            HOLD WALK
-          </button>
-        </div>
-      )}
     </div>
   );
 };
