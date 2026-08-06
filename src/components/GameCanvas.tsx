@@ -59,9 +59,19 @@ const MAP_WALLS = [
   { x: -9.5, z: 5, width: 9, depth: 0.5 },
   { x: -3, z: 8.5, width: 0.5, depth: 7 },
 
-  // Bottom-Right Angled Wall
-  { x: 8.5, z: 8.5, width: 0.5, depth: 7, rotY: -Math.PI / 4 }, // Slanted wall
+  // Bottom-Right Angled Wall (position adjusted to not overlap green zone circle)
+  { x: 5.5, z: 6.5, width: 0.5, depth: 5, rotY: -Math.PI / 4 }, // Slanted wall
 ];
+
+// GREEN RELOAD ZONE CENTER & RADIUS
+const GREEN_ZONE_CENTER = { x: 10.5, z: 6.5 };
+const GREEN_ZONE_RADIUS = 2.8;
+
+const isInGreenZone = (px: number, pz: number) => {
+  const dx = px - GREEN_ZONE_CENTER.x;
+  const dz = pz - GREEN_ZONE_CENTER.z;
+  return (dx * dx + dz * dz) <= (GREEN_ZONE_RADIUS * GREEN_ZONE_RADIUS);
+};
 
 // Helper function to resolve player/zombie collisions against solid interior walls
 const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
@@ -524,15 +534,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       scene.add(wall);
     });
 
-    // SOLID INTERIOR WALL BARRIERS (from diagram) WITH GLOWING NEON STRIPS
+    // SOLID INTERIOR WALL BARRIERS (from diagram) WITH GLOWING WHITE CAP STRIPS
     const interiorWallMat = new THREE.MeshStandardMaterial({
       color: 0x3f4656,
       roughness: 0.5,
       metalness: 0.4,
     });
 
-    const wallGlowColors = [0x00f0ff, 0xff00aa, 0x00ff88, 0xffaa00, 0xaa00ff];
-    MAP_WALLS.forEach((w, idx) => {
+    const glowCapMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    MAP_WALLS.forEach((w) => {
       const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(w.width, 3.5, w.depth), interiorWallMat);
       wallMesh.position.set(w.x, 1.75, w.z);
       if (w.rotY) wallMesh.rotation.y = w.rotY;
@@ -540,9 +550,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wallMesh.receiveShadow = true;
       scene.add(wallMesh);
 
-      // Glowing Neon Cap Strip on top of each wall
-      const glowColor = wallGlowColors[idx % wallGlowColors.length];
-      const glowCapMat = new THREE.MeshBasicMaterial({ color: glowColor });
+      // Glowing White Cap Strip on top of each wall
       const glowCap = new THREE.Mesh(new THREE.BoxGeometry(w.width + 0.1, 0.12, w.depth + 0.1), glowCapMat);
       glowCap.position.set(w.x, 3.52, w.z);
       if (w.rotY) glowCap.rotation.y = w.rotY;
@@ -569,8 +577,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     blueLight.position.set(BLUE_PLAYER_SPAWN.x, 0.8, BLUE_PLAYER_SPAWN.z);
     scene.add(blueLight);
 
-    // GREEN RELOAD ZONE (Bottom-Right) - Vibrant Glowing Pad & Light Pillar
-    const reloadZoneGeo = new THREE.PlaneGeometry(6, 6);
+    // GREEN RELOAD ZONE (Bottom-Right Circle Pad & Light Pillar)
+    const reloadZoneGeo = new THREE.CircleGeometry(GREEN_ZONE_RADIUS, 32);
     const reloadZoneMat = new THREE.MeshStandardMaterial({
       color: 0x00ff88,
       roughness: 0.1,
@@ -580,18 +588,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     });
     const reloadZone = new THREE.Mesh(reloadZoneGeo, reloadZoneMat);
     reloadZone.rotation.x = -Math.PI / 2;
-    reloadZone.position.set(10.5, 0.02, 6.5);
+    reloadZone.position.set(GREEN_ZONE_CENTER.x, 0.02, GREEN_ZONE_CENTER.z);
     scene.add(reloadZone);
 
     // Green Translucent Light Pillar Beam
-    const greenBeamGeo = new THREE.CylinderGeometry(2.9, 2.9, 4.0, 32, 1, true);
+    const greenBeamGeo = new THREE.CylinderGeometry(GREEN_ZONE_RADIUS, GREEN_ZONE_RADIUS, 4.0, 32, 1, true);
     const greenBeamMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
     const greenBeam = new THREE.Mesh(greenBeamGeo, greenBeamMat);
-    greenBeam.position.set(10.5, 2.0, 6.5);
+    greenBeam.position.set(GREEN_ZONE_CENTER.x, 2.0, GREEN_ZONE_CENTER.z);
     scene.add(greenBeam);
 
     const greenZoneLight = new THREE.PointLight(0x00ff88, 5.0, 12);
-    greenZoneLight.position.set(10.5, 1.5, 6.5);
+    greenZoneLight.position.set(GREEN_ZONE_CENTER.x, 1.5, GREEN_ZONE_CENTER.z);
     scene.add(greenZoneLight);
 
     // RED ZOMBIE SPAWN MARKERS - Glowing Red Shapes & Light Pillars
@@ -613,23 +621,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       scene.add(redLight);
     });
 
-    // ORANGE BOSS SPAWN MARKER (Left Wall) - Glowing Orange Star Shape & Light Beam
+    // PURPLE BOSS SPAWN MARKER (Left Wall) - Glowing Purple Star Shape & Light Beam
     const bossStarGeo = new THREE.RingGeometry(0.3, 1.2, 5);
-    const bossStarMat = new THREE.MeshBasicMaterial({ color: 0xff7700, side: THREE.DoubleSide });
+    const bossStarMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, side: THREE.DoubleSide });
     const bossStar = new THREE.Mesh(bossStarGeo, bossStarMat);
     bossStar.rotation.x = -Math.PI / 2;
     bossStar.position.set(ORANGE_BOSS_SPAWN.x, 0.02, ORANGE_BOSS_SPAWN.z);
     scene.add(bossStar);
 
-    const orangePillarGeo = new THREE.CylinderGeometry(1.1, 1.1, 4.0, 20, 1, true);
-    const orangePillarMat = new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
-    const orangePillar = new THREE.Mesh(orangePillarGeo, orangePillarMat);
-    orangePillar.position.set(ORANGE_BOSS_SPAWN.x, 2.0, ORANGE_BOSS_SPAWN.z);
-    scene.add(orangePillar);
+    const purplePillarGeo = new THREE.CylinderGeometry(1.1, 1.1, 4.0, 20, 1, true);
+    const purplePillarMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    const purplePillar = new THREE.Mesh(purplePillarGeo, purplePillarMat);
+    purplePillar.position.set(ORANGE_BOSS_SPAWN.x, 2.0, ORANGE_BOSS_SPAWN.z);
+    scene.add(purplePillar);
 
-    const orangeLight = new THREE.PointLight(0xff7700, 4.5, 8);
-    orangeLight.position.set(ORANGE_BOSS_SPAWN.x, 1.0, ORANGE_BOSS_SPAWN.z);
-    scene.add(orangeLight);
+    const purpleLight = new THREE.PointLight(0xaa00ff, 4.5, 8);
+    purpleLight.position.set(ORANGE_BOSS_SPAWN.x, 1.0, ORANGE_BOSS_SPAWN.z);
+    scene.add(purpleLight);
 
     envMaterialsRef.current = {
       floor: floorMat,
@@ -1022,11 +1030,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const handleShoot = () => {
     if (isPaused || !cameraRef.current || !sceneRef.current) return;
 
-    // GREEN ZONE CHECK: Do NOT allow shooting while standing in the Green Reload Zone (Bottom-Right: x: 7.5 to 13.5, z: 3.5 to 9.5)
+    // GREEN ZONE CHECK: Do NOT allow shooting while standing in the Circular Green Reload Zone
     if (cameraRef.current) {
       const px = cameraRef.current.position.x;
       const pz = cameraRef.current.position.z;
-      if (px >= 7.5 && px <= 13.5 && pz >= 3.5 && pz <= 9.5) {
+      if (isInGreenZone(px, pz)) {
         soundManager.playEmptyClick();
         return;
       }
@@ -1256,11 +1264,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
       camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
 
-      // 1.8 GREEN RELOAD ZONE LOGIC (Bottom-Right: x: 7.5 to 13.5, z: 3.5 to 9.5)
+      // 1.8 GREEN RELOAD ZONE LOGIC (Circular Zone)
       if (mode === 'PLAY') {
         const px = camera.position.x;
         const pz = camera.position.z;
-        if (px >= 7.5 && px <= 13.5 && pz >= 3.5 && pz <= 9.5) {
+        if (isInGreenZone(px, pz)) {
           if (ammo < 30) {
             reloadTimeRef.current += delta;
             if (reloadTimeRef.current >= 2.0) {
