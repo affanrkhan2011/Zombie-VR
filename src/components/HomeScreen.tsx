@@ -102,6 +102,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="text-[#ff3300] uppercase mb-4 text-base">Rules of Engagement</div>
           <ul className="space-y-3">
             <li><span className="text-white">Aim:</span> Drag to look. Rotate phone if Gyro ON.</li>
+            <li><span className="text-white">Walk:</span> Jog/step in place with phone, hold WALK button, or use WASD keys.</li>
             <li><span className="text-white">Fire:</span> Tap anywhere. Infinite ammo.</li>
             <li><span className="text-white">Health:</span> 150 HP. Bite = -10 HP.</li>
             <li><span className="text-white">Rewards:</span> +1 HP per kill, +5 HP per wave.</li>

@@ -104,8 +104,56 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const spawnedWaveZombiesRef = useRef<number>(0);
   const killedWaveZombiesRef = useRef<number>(0);
 
-  // Audio interval for low HP heartbeat
-  const heartbeatTimerRef = useRef<number>(0);
+  // Player Position & Walking Movement
+  const walkDistanceRef = useRef<number>(0);
+  const lastStepTimeRef = useRef<number>(0);
+  const isMotionSteppingRef = useRef<boolean>(false);
+  const touchWalkRef = useRef<boolean>(false);
+  const keysPressedRef = useRef<{ [key: string]: boolean }>({});
+
+  // Motion-based Step / Jogging Detection via Accelerometer
+  useEffect(() => {
+    const handleMotion = (e: DeviceMotionEvent) => {
+      const acc = e.acceleration || e.accelerationIncludingGravity;
+      if (!acc || acc.x === null || acc.y === null || acc.z === null) return;
+
+      const x = acc.x || 0;
+      const y = acc.y || 0;
+      const z = acc.z || 0;
+
+      // Calculate total acceleration magnitude delta filtering out static gravity (~9.8)
+      const totalAcc = Math.sqrt(x * x + y * y + z * z);
+      const accDelta = Math.abs(totalAcc - 9.8);
+
+      const now = performance.now();
+      // Step impulse detected when user steps or jogs in place (vertical/forward oscillation > 2.2 m/s²)
+      if (accDelta > 2.2 && now - lastStepTimeRef.current > 200) {
+        lastStepTimeRef.current = now;
+        isMotionSteppingRef.current = true;
+      }
+    };
+
+    window.addEventListener('devicemotion', handleMotion, true);
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion, true);
+    };
+  }, []);
+
+  // Keyboard Movement Event Listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressedRef.current[e.key.toLowerCase()] = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressedRef.current[e.key.toLowerCase()] = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   // 1. Initialize Three.js Scene
   useEffect(() => {
@@ -446,23 +494,49 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const isLightWave = mode === 'PLAY' && wave % 2 === 0;
     const group = new THREE.Group();
 
-    // White character base color with subtle tint variations per type
-    let bodyColor = isLightWave ? 0x111111 : 0xffffff;
-    let clothesColor = isLightWave ? 0x222222 : 0xe0e0e0;
+    // Color Bug Fix:
+    // Dark mode (isLightWave === false): White/Pale zombies
+    // Light mode (isLightWave === true): Black/Dark Charcoal zombies
+    let bodyColor: number;
+    let clothesColor: number;
     let scale = 1.0;
 
-    if (zombie.type === 'RUNNER') {
-      bodyColor = 0xfff0f0; // Pale blood-tinted white
-      clothesColor = 0xd5c5c5;
-      scale = 0.88;
-    } else if (zombie.type === 'TANK') {
-      bodyColor = 0xe6e6e6; // Heavy bone white
-      clothesColor = 0xcccccc;
-      scale = 1.5;
-    } else if (zombie.type === 'STALKER') {
-      bodyColor = 0xf0f8ff; // Ghostly silver white
-      clothesColor = 0xd8e0e8;
-      scale = 1.05;
+    if (isLightWave) {
+      // LIGHT MODE: Black / Dark Charcoal zombies
+      bodyColor = 0x111111;
+      clothesColor = 0x222222;
+
+      if (zombie.type === 'RUNNER') {
+        bodyColor = 0x200808; // Dark blood black
+        clothesColor = 0x181818;
+        scale = 0.88;
+      } else if (zombie.type === 'TANK') {
+        bodyColor = 0x0a0a0a; // Obsidian jet black
+        clothesColor = 0x1a1a1a;
+        scale = 1.5;
+      } else if (zombie.type === 'STALKER') {
+        bodyColor = 0x0e121a; // Dark shadow blue-black
+        clothesColor = 0x181a22;
+        scale = 1.05;
+      }
+    } else {
+      // DARK MODE: White / Pale Bone zombies
+      bodyColor = 0xffffff;
+      clothesColor = 0xe0e0e0;
+
+      if (zombie.type === 'RUNNER') {
+        bodyColor = 0xfff0f0; // Pale blood-tinted white
+        clothesColor = 0xd5c5c5;
+        scale = 0.88;
+      } else if (zombie.type === 'TANK') {
+        bodyColor = 0xe6e6e6; // Heavy bone white
+        clothesColor = 0xcccccc;
+        scale = 1.5;
+      } else if (zombie.type === 'STALKER') {
+        bodyColor = 0xf0f8ff; // Ghostly silver white
+        clothesColor = 0xd8e0e8;
+        scale = 1.05;
+      }
     }
 
     // Bright materials with subtle emissive component for dark visibility
@@ -470,14 +544,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       color: bodyColor,
       roughness: 0.4,
       emissive: new THREE.Color(bodyColor),
-      emissiveIntensity: 0.15, // Subtle self-glow so they POP in dark room
+      emissiveIntensity: isLightWave ? 0.02 : 0.15,
     });
 
     const clothesMat = new THREE.MeshStandardMaterial({
       color: clothesColor,
       roughness: 0.5,
       emissive: new THREE.Color(clothesColor),
-      emissiveIntensity: 0.1,
+      emissiveIntensity: isLightWave ? 0.02 : 0.1,
     });
 
     // Vivid glowing red eyes
@@ -901,6 +975,50 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         camera.quaternion.setFromEuler(euler);
       }
 
+      // 1.5 PLAYER WALKING MOVEMENT (Motion Step Detection + WASD/Arrows + Touch Hold)
+      const now = performance.now();
+      const isMotionActive = (now - lastStepTimeRef.current < 450);
+      const moveFwd = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'] || touchWalkRef.current || isMotionActive;
+      const moveBack = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
+      const moveLeft = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
+      const moveRight = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
+
+      let fwdInput = 0;
+      if (moveFwd) fwdInput += 1;
+      if (moveBack) fwdInput -= 1;
+
+      let strafeInput = 0;
+      if (moveRight) strafeInput += 1;
+      if (moveLeft) strafeInput -= 1;
+
+      if (fwdInput !== 0 || strafeInput !== 0) {
+        const moveSpeed = 3.8;
+        const forwardDir = new THREE.Vector3();
+        camera.getWorldDirection(forwardDir);
+        forwardDir.y = 0;
+        forwardDir.normalize();
+
+        const rightDir = new THREE.Vector3().crossVectors(forwardDir, new THREE.Vector3(0, 1, 0)).normalize();
+
+        const moveVec = new THREE.Vector3()
+          .addScaledVector(forwardDir, fwdInput)
+          .addScaledVector(rightDir, strafeInput)
+          .normalize();
+
+        camera.position.addScaledVector(moveVec, moveSpeed * delta);
+
+        // Simulated head bobbing while walking
+        walkDistanceRef.current += delta * moveSpeed;
+        const headBob = Math.sin(walkDistanceRef.current * 10) * 0.04;
+        camera.position.y = 1.6 + headBob;
+
+        // Keep player strictly inside the 3D room boundaries
+        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
+        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
+      } else {
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 1.6, 0.1);
+      }
+
       // Recoil Recovery
       if (recoilRef.current > 0) {
         pitchRef.current += recoilRef.current * 0.3;
@@ -944,7 +1062,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           lastSpawnTimeRef.current = currentTime;
         }
 
-        const playerPos = new THREE.Vector3(0, 0, 0);
+        const playerPos = camera.position.clone();
+        playerPos.y = 0; // floor projection
         const warnings: DirectionalWarning[] = [];
         const idsToRemove: string[] = [];
 
@@ -957,8 +1076,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           const dirToPlayer = new THREE.Vector3().subVectors(playerPos, zPos).normalize();
           const distToPlayer = zPos.distanceTo(playerPos);
 
-          // Rotate Zombie towards player
-          meshGroup.lookAt(0, meshGroup.position.y, 0);
+          // Rotate Zombie towards player's position
+          meshGroup.lookAt(playerPos.x, meshGroup.position.y, playerPos.z);
 
           // Move Zombie toward player
           if (distToPlayer > z.radius) {
@@ -985,13 +1104,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               onPlayerHit(z.damage); // take damage
               
               // Zombie disappears after attacking
-              createExplosionParticles(meshGroup.position, '#ffffff', 25); // white blocks remains
+              createExplosionParticles(meshGroup.position, '#ffffff', 25);
               idsToRemove.push(z.id);
             }
           }
 
-          // Calculate directional warning for HUD radar
-          const angleToZombie = Math.atan2(z.position[0], -z.position[2]); // angle relative to north
+          // Calculate directional warning for HUD radar relative to player position
+          const dx = z.position[0] - camera.position.x;
+          const dz = z.position[2] - camera.position.z;
+          const angleToZombie = Math.atan2(dx, -dz); // angle relative to north
           let relAngle = angleToZombie - yawRef.current;
           while (relAngle > Math.PI) relAngle -= Math.PI * 2;
           while (relAngle < -Math.PI) relAngle += Math.PI * 2;
@@ -1079,6 +1200,28 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
         </div>
       </div>
+
+      {/* HOLD TO WALK TOUCH BUTTON & MOTION WALK CONTROLS */}
+      {!isPaused && (
+        <div className="absolute bottom-6 left-6 z-30 flex items-center gap-3 pointer-events-auto">
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              touchWalkRef.current = true;
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              touchWalkRef.current = false;
+            }}
+            onPointerLeave={() => {
+              touchWalkRef.current = false;
+            }}
+            className="px-6 py-3 bg-black/80 hover:bg-[#ff3300] hover:text-black border-2 border-white/30 text-white font-mono text-sm uppercase tracking-wider transition-colors active:scale-95 shadow-2xl"
+          >
+            HOLD WALK
+          </button>
+        </div>
+      )}
     </div>
   );
 };
