@@ -23,7 +23,7 @@ const computeDeviceQuaternion = (alpha: number, beta: number, gamma: number, ori
   return q;
 };
 
-// 8 Door Locations (2 on each wall) where zombies spawn and enter
+// 8 Door Locations on outer walls where zombies emerge
 const DOOR_SPAWNS = [
   { id: 'north_left', x: -7.5, y: 0, z: -14.8, rotY: 0 },
   { id: 'north_right', x: 7.5, y: 0, z: -14.8, rotY: 0 },
@@ -35,20 +35,111 @@ const DOOR_SPAWNS = [
   { id: 'east_bottom', x: 14.8, y: 0, z: 7.5, rotY: -Math.PI / 2 },
 ];
 
+// RED ZOMBIE SPAWN POINTS (from map diagram)
+const RED_ZOMBIE_SPAWNS = [
+  { x: -12, z: -10 }, // Top-Left
+  { x: -9, z: -3 },   // Upper-Left alcove
+  { x: 5, z: -10 },   // Top-Center-Right
+  { x: 12, z: -10 },  // Top-Right
+  { x: -2, z: -1 },   // Center alcove
+  { x: -12, z: 9 },   // Bottom-Left
+  { x: 4, z: 9 },     // Bottom-Right-Center
+];
+
+// ORANGE BOSS SPAWN POINT (from map diagram)
+const ORANGE_BOSS_SPAWN = { x: -12, z: 0 };
+
+// BLUE PLAYER SPAWN POINT (from map diagram)
+const BLUE_PLAYER_SPAWN = { x: 2, y: 1.6, z: -1 };
+
+// Solid Interior Walls matching the diagram provided by user
+const MAP_WALLS = [
+  // Top-Left L-Wall Structure
+  { x: -9.5, z: -6, width: 9, depth: 0.5 },
+  { x: -5, z: -3, width: 0.5, depth: 6.5 },
+
+  // Top-Right Structure
+  { x: 3.5, z: -7, width: 9, depth: 0.5 },
+  { x: 8, z: -8.5, width: 0.5, depth: 7 },
+  { x: 9.8, z: -2.5, width: 0.5, depth: 5, rotY: Math.PI / 6 }, // Slanted wall
+
+  // Center T-Wall
+  { x: 0, z: -1.5, width: 0.5, depth: 5 },
+  { x: -0.5, z: 1, width: 7, depth: 0.5 },
+
+  // Bottom-Left Structure
+  { x: -9.5, z: 5, width: 9, depth: 0.5 },
+  { x: -3, z: 8.5, width: 0.5, depth: 7 },
+
+  // Bottom-Right Angled Wall
+  { x: 8.5, z: 8.5, width: 0.5, depth: 7, rotY: -Math.PI / 4 }, // Slanted wall
+];
+
 // Solid Obstacle Crates / Boxes in the arena
 const CRATE_BOXES = [
   { x: -10, z: -10, width: 2, depth: 2 },
   { x: 11, z: -8, width: 2, depth: 2 },
   { x: -9, z: 11, width: 2, depth: 2 },
-  { x: 10, z: 10, width: 2, depth: 2 },
   { x: -12, z: 2, width: 2, depth: 2 },
-  { x: 12, z: -3, width: 2, depth: 2 },
   { x: 3, z: -12, width: 2, depth: 2 },
   { x: -4, z: 12, width: 2, depth: 2 },
 ];
 
-// Helper function to resolve player/zombie collisions against solid crates
-const resolveCrateCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
+// Helper function to resolve player/zombie collisions against solid interior walls & crates
+const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
+  MAP_WALLS.forEach(w => {
+    let px = pos.x - w.x;
+    let pz = pos.z - w.z;
+
+    if (w.rotY) {
+      const cos = Math.cos(-w.rotY);
+      const sin = Math.sin(-w.rotY);
+      const rx = px * cos - pz * sin;
+      const rz = px * sin + pz * cos;
+      px = rx;
+      pz = rz;
+    }
+
+    const halfW = w.width / 2;
+    const halfD = w.depth / 2;
+    const minX = -halfW;
+    const maxX = halfW;
+    const minZ = -halfD;
+    const maxZ = halfD;
+
+    const closestX = THREE.MathUtils.clamp(px, minX, maxX);
+    const closestZ = THREE.MathUtils.clamp(pz, minZ, maxZ);
+
+    const dx = px - closestX;
+    const dz = pz - closestZ;
+    const distSq = dx * dx + dz * dz;
+
+    if (distSq < radius * radius) {
+      const dist = Math.sqrt(distSq);
+      let pushX = 0;
+      let pushZ = 0;
+      if (dist > 0.0001) {
+        const overlap = radius - dist;
+        pushX = (dx / dist) * overlap;
+        pushZ = (dz / dist) * overlap;
+      } else {
+        pushX = radius;
+      }
+
+      if (w.rotY) {
+        const cos = Math.cos(w.rotY);
+        const sin = Math.sin(w.rotY);
+        const rx = pushX * cos - pushZ * sin;
+        const rz = pushX * sin + pushZ * cos;
+        pushX = rx;
+        pushZ = rz;
+      }
+
+      pos.x += pushX;
+      pos.z += pushZ;
+    }
+  });
+
   CRATE_BOXES.forEach(c => {
     const halfW = c.width / 2;
     const halfD = c.depth / 2;
@@ -83,11 +174,13 @@ interface GameCanvasProps {
   isPaused: boolean;
   wave: number;
   hp: number;
+  ammo: number;
   recenterSignal?: number;
   onPlayerHit: (damage: number) => void;
   onZombieKill: (zombieId: string, isHeadshot: boolean) => void;
   onTargetHit: (targetId: string, isBullseye: boolean) => void;
   onShotFired: (hitSomething: boolean) => void;
+  onReloadProgress: (progressTime: number, isRefilled: boolean) => void;
   onDirectionalUpdate: (warnings: DirectionalWarning[]) => void;
   onWaveClear: () => void;
 }
@@ -98,11 +191,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   isPaused,
   wave,
   hp,
+  ammo,
   recenterSignal = 0,
   onPlayerHit,
   onZombieKill,
   onTargetHit,
   onShotFired,
+  onReloadProgress,
   onDirectionalUpdate,
   onWaveClear,
 }) => {
@@ -120,14 +215,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const muzzleFlashMeshRef = useRef<THREE.Mesh | null>(null);
   const flashlightRef = useRef<THREE.SpotLight | null>(null);
 
-  // Environment Refs for Theme alternating
+  // Environment Refs
   const envMaterialsRef = useRef<{
     floor: THREE.MeshStandardMaterial;
     ceiling: THREE.MeshStandardMaterial;
     wall: THREE.MeshStandardMaterial;
     crate: THREE.MeshStandardMaterial;
   } | null>(null);
-  
+
   const lightsRef = useRef<{
     ambient: THREE.AmbientLight;
     emergency: THREE.PointLight;
@@ -157,8 +252,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const totalWaveZombiesRef = useRef<number>(0);
   const spawnedWaveZombiesRef = useRef<number>(0);
   const killedWaveZombiesRef = useRef<number>(0);
+  const hasSpawnedBossInWaveRef = useRef<boolean>(false);
   const heartbeatTimerRef = useRef<number>(0);
   const lastSpatialGroanTimeRef = useRef<number>(0);
+
+  // Reload Zone state
+  const reloadTimeRef = useRef<number>(0);
 
   // Player Position & Walking Movement
   const walkDistanceRef = useRef<number>(0);
@@ -171,10 +270,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const joystickTouchIdRef = useRef<number | null>(null);
   const joystickOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const JOYSTICK_MAX_RADIUS = 40; // Max displacement in pixels
+  const JOYSTICK_MAX_RADIUS = 40;
 
   const handleJoystickPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation(); // prevent triggering weapon fire
+    e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     joystickTouchIdRef.current = e.pointerId;
     joystickOriginRef.current = { x: e.clientX, y: e.clientY };
@@ -240,8 +339,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050204);
-    scene.fog = new THREE.FogExp2(0x070305, 0.065);
+    scene.background = new THREE.Color(0x0a0a0f);
+    scene.fog = new THREE.FogExp2(0x0c0c14, 0.05);
     sceneRef.current = scene;
 
     // CAMERA
@@ -251,7 +350,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       0.1,
       100
     );
-    camera.position.set(0, 1.6, 0); // Player eye level 1.6m
+    camera.position.set(BLUE_PLAYER_SPAWN.x, BLUE_PLAYER_SPAWN.y, BLUE_PLAYER_SPAWN.z);
     cameraRef.current = camera;
 
     // RENDERER
@@ -263,25 +362,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // --- ENVIRONMENT: DARK BUNKER ROOM ---
+    // --- ENVIRONMENT & MAP BUILD ---
     buildRoomEnvironment(scene);
 
     // --- LIGHTS ---
-    const ambientLight = new THREE.AmbientLight(0x221525, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
 
-    // Red Emergency Pulsing Overhead Light
-    const emergencyLight = new THREE.PointLight(0xff1122, 2.5, 25);
+    const emergencyLight = new THREE.PointLight(0xff1122, 0, 25);
     emergencyLight.position.set(0, 4.8, 0);
-    emergencyLight.castShadow = true;
     scene.add(emergencyLight);
 
-    // Dim Corner Lights
-    const cornerLight1 = new THREE.PointLight(0x442200, 1.2, 18);
+    const cornerLight1 = new THREE.PointLight(0x442200, 0, 18);
     cornerLight1.position.set(-8, 3, -8);
     scene.add(cornerLight1);
 
-    const cornerLight2 = new THREE.PointLight(0x112244, 1.2, 18);
+    const cornerLight2 = new THREE.PointLight(0x112244, 0, 18);
     cornerLight2.position.set(8, 3, 8);
     scene.add(cornerLight2);
 
@@ -293,7 +389,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
 
     // --- FLASHLIGHT ---
-    const flashlight = new THREE.SpotLight(0xfff0dd, 4.0, 22, Math.PI / 6, 0.4, 1.5);
+    const flashlight = new THREE.SpotLight(0xfff0dd, 0, 22, Math.PI / 6, 0.4, 1.5);
     flashlight.position.set(0, 1.6, 0);
     flashlight.target.position.set(0, 1.6, -1);
     camera.add(flashlight);
@@ -315,7 +411,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     });
     const laserGeo = new THREE.CylinderGeometry(0.003, 0.003, 1, 8);
     laserGeo.rotateX(Math.PI / 2);
-    laserGeo.translate(0, 0, -0.5); // origin at base
+    laserGeo.translate(0, 0, -0.5);
     const laserMesh = new THREE.Mesh(laserGeo, laserMat);
     gunGroup.add(laserMesh);
     laserMeshRef.current = laserMesh;
@@ -351,7 +447,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
   }, []);
 
-  // Update Laser Color or Flashlight based on Settings
+  // Update Laser Color
   useEffect(() => {
     if (laserMeshRef.current) {
       const col = new THREE.Color(settings.laserColor || '#ff0033');
@@ -360,8 +456,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     soundManager.setMuted(!settings.soundEnabled);
   }, [settings]);
 
-  // Setup / Reset Wave or Practice Mode
+  // Setup / Reset Wave (Resets Player to Blue Spawn Point)
   useEffect(() => {
+    // Reset Player to Blue Spawn Point after every wave
+    if (cameraRef.current) {
+      cameraRef.current.position.set(BLUE_PLAYER_SPAWN.x, BLUE_PLAYER_SPAWN.y, BLUE_PLAYER_SPAWN.z);
+    }
+
     // Clear existing objects
     zombiesRef.current.forEach(z => removeZombieMesh(z.id));
     zombiesRef.current = [];
@@ -370,22 +471,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     spawnedWaveZombiesRef.current = 0;
     killedWaveZombiesRef.current = 0;
+    hasSpawnedBossInWaveRef.current = false;
+    reloadTimeRef.current = 0;
 
     if (mode === 'PLAY') {
-      // Calculate zombies for this wave (Wave 1 = 6, Wave 2 = 10, Wave 3 = 15...)
-      totalWaveZombiesRef.current = 5 + wave * 4;
+      // Calculate zombies for this wave (includes Boss if wave % 3 === 0)
+      const baseZombies = 5 + wave * 4;
+      totalWaveZombiesRef.current = wave % 3 === 0 ? baseZombies + 1 : baseZombies;
     } else if (mode === 'PRACTICE') {
-      // Spawn Practice Targets
       spawnPracticeTargets();
     }
   }, [mode, wave]);
 
-  // Recenter signal trigger from HUD / parent
+  // Recenter signal trigger from HUD
   useEffect(() => {
     initialYawOffsetRef.current = null;
   }, [recenterSignal]);
 
-  // Handle Gyroscope Orientation via standard Three.js deviceorientation
+  // Handle Gyroscope Orientation
   useEffect(() => {
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (!settings.gyroEnabled) return;
@@ -400,7 +503,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       const qRaw = computeDeviceQuaternion(alpha, beta, gamma, orient);
 
-      // Get forward vector (0, 0, -1) rotated by qRaw to extract current heading
       const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(qRaw);
       const heading = Math.atan2(forwardVec.x, -forwardVec.z);
 
@@ -411,7 +513,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const yawOffset = initialYawOffsetRef.current;
       const yawOffsetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -yawOffset);
 
-      // Final camera quaternion is relative to the calibrated offset
       deviceQuatRef.current.copy(yawOffsetQuat).multiply(qRaw);
     };
 
@@ -421,29 +522,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
   }, [settings.gyroEnabled]);
 
-  // Theme Switching - All waves are light mode
-  useEffect(() => {
-    const isLightWave = true;
-
-    if (envMaterialsRef.current) {
-      envMaterialsRef.current.floor.color.setHex(0xdddddd);
-      envMaterialsRef.current.ceiling.color.setHex(0xeeeeee);
-      envMaterialsRef.current.wall.color.setHex(0xcccccc);
-      envMaterialsRef.current.crate.color.setHex(0xaaaaaa);
-    }
-    
-    if (lightsRef.current) {
-      lightsRef.current.ambient.color.setHex(0xffffff);
-      lightsRef.current.ambient.intensity = 1.0;
-      lightsRef.current.emergency.intensity = 0; // turn off red light
-      lightsRef.current.corner1.intensity = 0;
-      lightsRef.current.corner2.intensity = 0;
-    }
-    if (flashlightRef.current) {
-      flashlightRef.current.visible = false;
-    }
-  }, [wave, mode]);
-
   // --- ROOM BUILDER ---
   const buildRoomEnvironment = (scene: THREE.Scene) => {
     const roomSize = 30;
@@ -452,8 +530,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Floor
     const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize, 32, 32);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x18181f,
-      roughness: 0.85,
+      color: 0x22252e,
+      roughness: 0.8,
       metalness: 0.2,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -461,23 +539,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Floor grid / blood stain decals
-    const gridHelper = new THREE.GridHelper(roomSize, 30, 0xff2233, 0x221525);
+    // Grid helper on floor
+    const gridHelper = new THREE.GridHelper(roomSize, 30, 0x556677, 0x333b47);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
     // Ceiling
     const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
-    const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x0c0b10, roughness: 0.9 });
+    const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x11131a, roughness: 0.9 });
     const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = roomHeight;
     scene.add(ceiling);
 
-    // 4 Walls
+    // 4 Outer Boundary Walls
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x22222a,
-      roughness: 0.7,
+      color: 0x2d333f,
+      roughness: 0.6,
       metalness: 0.3,
     });
 
@@ -496,7 +574,77 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       scene.add(wall);
     });
 
-    // 8 CONTAINER DOORS (2 on each wall) WHERE ZOMBIES EMERGE
+    // SOLID INTERIOR WALL BARRIERS (from diagram)
+    const interiorWallMat = new THREE.MeshStandardMaterial({
+      color: 0x3f4656,
+      roughness: 0.5,
+      metalness: 0.4,
+    });
+
+    MAP_WALLS.forEach(w => {
+      const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(w.width, 3.5, w.depth), interiorWallMat);
+      wallMesh.position.set(w.x, 1.75, w.z);
+      if (w.rotY) wallMesh.rotation.y = w.rotY;
+      wallMesh.castShadow = true;
+      wallMesh.receiveShadow = true;
+      scene.add(wallMesh);
+    });
+
+    // BLUE PLAYER SPAWN POINT MARKER (Center-Right)
+    const playerSpawnCircle = new THREE.Mesh(
+      new THREE.RingGeometry(0.2, 0.9, 32),
+      new THREE.MeshBasicMaterial({ color: 0x0088ff, side: THREE.DoubleSide })
+    );
+    playerSpawnCircle.rotation.x = -Math.PI / 2;
+    playerSpawnCircle.position.set(BLUE_PLAYER_SPAWN.x, 0.02, BLUE_PLAYER_SPAWN.z);
+    scene.add(playerSpawnCircle);
+
+    const blueLight = new THREE.PointLight(0x0088ff, 1.5, 4);
+    blueLight.position.set(BLUE_PLAYER_SPAWN.x, 0.5, BLUE_PLAYER_SPAWN.z);
+    scene.add(blueLight);
+
+    // GREEN RELOAD ZONE (Bottom-Right)
+    const reloadZoneGeo = new THREE.PlaneGeometry(6, 6);
+    const reloadZoneMat = new THREE.MeshStandardMaterial({
+      color: 0x10b981,
+      roughness: 0.2,
+      emissive: 0x059669,
+      emissiveIntensity: 0.8,
+      side: THREE.DoubleSide,
+    });
+    const reloadZone = new THREE.Mesh(reloadZoneGeo, reloadZoneMat);
+    reloadZone.rotation.x = -Math.PI / 2;
+    reloadZone.position.set(10.5, 0.02, 6.5);
+    scene.add(reloadZone);
+
+    const greenZoneLight = new THREE.PointLight(0x10b981, 3.5, 9);
+    greenZoneLight.position.set(10.5, 1.5, 6.5);
+    scene.add(greenZoneLight);
+
+    // RED ZOMBIE SPAWN MARKERS
+    RED_ZOMBIE_SPAWNS.forEach(sp => {
+      const redCircle = new THREE.Mesh(
+        new THREE.RingGeometry(0.1, 0.6, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff1100, side: THREE.DoubleSide })
+      );
+      redCircle.rotation.x = -Math.PI / 2;
+      redCircle.position.set(sp.x, 0.02, sp.z);
+      scene.add(redCircle);
+    });
+
+    // ORANGE BOSS SPAWN MARKER (Left Wall)
+    const bossStarGeo = new THREE.RingGeometry(0.3, 1.0, 5);
+    const bossStarMat = new THREE.MeshBasicMaterial({ color: 0xff8800, side: THREE.DoubleSide });
+    const bossStar = new THREE.Mesh(bossStarGeo, bossStarMat);
+    bossStar.rotation.x = -Math.PI / 2;
+    bossStar.position.set(ORANGE_BOSS_SPAWN.x, 0.02, ORANGE_BOSS_SPAWN.z);
+    scene.add(bossStar);
+
+    const orangeLight = new THREE.PointLight(0xff8800, 2.5, 6);
+    orangeLight.position.set(ORANGE_BOSS_SPAWN.x, 1.0, ORANGE_BOSS_SPAWN.z);
+    scene.add(orangeLight);
+
+    // CONTAINER DOORS ON WALLS
     const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x444450, roughness: 0.5, metalness: 0.7 });
     const doorInnerMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
     const doorPanelMat = new THREE.MeshStandardMaterial({ color: 0x2b2b36, roughness: 0.6, metalness: 0.8 });
@@ -507,12 +655,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       doorGroup.position.set(d.x, d.y, d.z);
       doorGroup.rotation.y = d.rotY;
 
-      // Dark Inner Recess Aperture
       const innerRecess = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 0.1), doorInnerMat);
       innerRecess.position.set(0, 1.9, -0.1);
       doorGroup.add(innerRecess);
 
-      // Heavy Metal Outer Posts
       const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.35), doorFrameMat);
       leftPost.position.set(-1.35, 1.9, 0);
       doorGroup.add(leftPost);
@@ -525,7 +671,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       topHeader.position.set(0, 3.97, 0);
       doorGroup.add(topHeader);
 
-      // Parted Steel Sliding Door Panels
       const leftDoorPanel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.7, 0.12), doorPanelMat);
       leftDoorPanel.position.set(-0.75, 1.85, -0.02);
       doorGroup.add(leftDoorPanel);
@@ -534,36 +679,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       rightDoorPanel.position.set(0.75, 1.85, -0.02);
       doorGroup.add(rightDoorPanel);
 
-      // Yellow/Orange Caution Bar Header
       const hazardBar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 0.05), warningBarMat);
       hazardBar.position.set(0, 3.65, 0.18);
       doorGroup.add(hazardBar);
 
-      // Red Hazard Light Fixture above Door
-      const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.2), warningBarMat);
-      fixture.position.set(0, 4.15, 0.18);
-      doorGroup.add(fixture);
-
-      const redLens = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff1100 }));
-      redLens.position.set(0, 4.15, 0.25);
-      doorGroup.add(redLens);
-
-      const redLight = new THREE.PointLight(0xff1100, 1.5, 6);
-      redLight.position.set(0, 4.15, 0.4);
-      doorGroup.add(redLight);
-
       scene.add(doorGroup);
     });
 
-    // Decorative Pillars & Industrial Crates
+    // Crates
     const crateMat = new THREE.MeshStandardMaterial({ color: 0x3d352e, roughness: 0.8 });
-    
     envMaterialsRef.current = {
       floor: floorMat,
       ceiling: ceilingMat,
       wall: wallMat,
       crate: crateMat
     };
+
     CRATE_BOXES.forEach(c => {
       const crate = new THREE.Mesh(new THREE.BoxGeometry(c.width, 2, c.depth), crateMat);
       crate.position.set(c.x, 1, c.z);
@@ -581,27 +712,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 });
     const redMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
 
-    // Barrel
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.55), metalMat);
     gun.add(barrel);
 
-    // Slide
     const slide = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.08, 0.5), metalMat);
     slide.position.set(0, 0.06, -0.02);
     gun.add(slide);
 
-    // Grip
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.12), darkMat);
     grip.position.set(0, -0.14, 0.15);
     grip.rotation.x = -0.3;
     gun.add(grip);
 
-    // Trigger Guard
     const guard = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.1), metalMat);
     guard.position.set(0, -0.08, 0.05);
     gun.add(guard);
 
-    // Laser Sight Box under barrel
     const laserBox = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.12), darkMat);
     laserBox.position.set(0, -0.07, -0.18);
     gun.add(laserBox);
@@ -613,50 +739,49 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return gun;
   };
 
-  // --- ZOMBIE 3D MODEL GENERATOR ---
+  // --- ZOMBIE 3D MODEL GENERATOR (Includes BIG PURPLE BOSS ZOMBIE!) ---
   const createZombieMesh = (zombie: Zombie): THREE.Group => {
-    const isLightWave = true; // All waves in light mode
     const group = new THREE.Group();
 
-    // Color Bug Fix:
-    // Dark mode (isLightWave === false): White/Pale zombies
-    // Light mode (isLightWave === true): Black/Dark Charcoal zombies
-    // Vibrant Orange Zombie Colors
     let bodyColor = 0xff6600; // Vibrant Orange for WALKER
-    let clothesColor = 0xcc5200; // Darker burnt orange
+    let clothesColor = 0xcc5200;
+    let eyeColor = 0xff0000;
     let scale = 1.0;
 
-    if (zombie.type === 'RUNNER') {
-      bodyColor = 0xff3300; // Fiery red-orange
+    if (zombie.type === 'BOSS') {
+      bodyColor = 0x8800cc; // Vibrant Deep Purple Boss!
+      clothesColor = 0x440077;
+      eyeColor = 0xe066ff; // Glowing violet eyes
+      scale = 2.2; // Huge Boss Zombie!
+    } else if (zombie.type === 'RUNNER') {
+      bodyColor = 0xff3300;
       clothesColor = 0xb32400;
       scale = 0.88;
     } else if (zombie.type === 'TANK') {
-      bodyColor = 0xe65c00; // Deep heavy amber-orange
+      bodyColor = 0xe65c00;
       clothesColor = 0x993d00;
       scale = 1.5;
     } else if (zombie.type === 'STALKER') {
-      bodyColor = 0xff8800; // Bright neon orange
+      bodyColor = 0xff8800;
       clothesColor = 0xb35900;
       scale = 1.05;
     }
 
-    // Bright materials with subtle emissive component for dark visibility
     const bodyMat = new THREE.MeshStandardMaterial({
       color: bodyColor,
       roughness: 0.4,
       emissive: new THREE.Color(bodyColor),
-      emissiveIntensity: isLightWave ? 0.02 : 0.15,
+      emissiveIntensity: zombie.type === 'BOSS' ? 0.25 : 0.02,
     });
 
     const clothesMat = new THREE.MeshStandardMaterial({
       color: clothesColor,
       roughness: 0.5,
       emissive: new THREE.Color(clothesColor),
-      emissiveIntensity: isLightWave ? 0.02 : 0.1,
+      emissiveIntensity: zombie.type === 'BOSS' ? 0.2 : 0.02,
     });
 
-    // Vivid glowing red eyes
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
 
     // Torso
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.8 * scale, 0.35 * scale), clothesMat);
@@ -672,7 +797,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     head.castShadow = true;
     group.add(head);
 
-    // Red Eyes - Slightly larger for striking visibility
+    // Eyes
     const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.07 * scale, 10, 10), eyeMat);
     leftEye.position.set(-0.11 * scale, 1.68 * scale, -0.21 * scale);
     group.add(leftEye);
@@ -684,7 +809,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Arms
     const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.7 * scale, 0.2 * scale), bodyMat);
     leftArm.position.set(-0.42 * scale, 1.0 * scale, -0.2 * scale);
-    leftArm.rotation.x = -Math.PI / 3; // Reaching arms
+    leftArm.rotation.x = -Math.PI / 3;
     leftArm.name = 'leftArm';
     group.add(leftArm);
 
@@ -705,33 +830,41 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     rightLeg.name = 'rightLeg';
     group.add(rightLeg);
 
-    // 3D Floating Health Bar above zombie head
+    // 3D Floating Health Bar above head
     const healthBarGroup = new THREE.Group();
     healthBarGroup.name = 'healthBarGroup';
     healthBarGroup.position.set(0, 2.15 * scale, 0);
 
-    const barBgMat = new THREE.MeshBasicMaterial({ color: 0x111116, side: THREE.DoubleSide });
-    const barBg = new THREE.Mesh(new THREE.PlaneGeometry(0.9 * scale, 0.12 * scale), barBgMat);
+    const isBoss = zombie.type === 'BOSS';
+    const numBlocks = isBoss ? 20 : 3;
+    const totalBarWidth = isBoss ? 2.4 * scale : 0.96 * scale;
+    const barHeight = 0.28 * scale;
+
+    const barBgMat = new THREE.MeshBasicMaterial({ color: 0x0a0c10, side: THREE.DoubleSide });
+    const barBg = new THREE.Mesh(new THREE.PlaneGeometry(totalBarWidth, barHeight), barBgMat);
     healthBarGroup.add(barBg);
 
-    const barBorderMat = new THREE.MeshBasicMaterial({ color: 0x444450, side: THREE.DoubleSide });
-    const barBorder = new THREE.Mesh(new THREE.PlaneGeometry(0.94 * scale, 0.16 * scale), barBorderMat);
+    const barBorderMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0x9900ff : 0x383b4a, side: THREE.DoubleSide });
+    const barBorder = new THREE.Mesh(new THREE.PlaneGeometry(totalBarWidth + 0.06 * scale, barHeight + 0.06 * scale), barBorderMat);
     barBorder.position.z = -0.001;
     healthBarGroup.add(barBorder);
 
-    const fillWidth = 0.84 * scale;
-    const fillHeight = 0.08 * scale;
-    const fillGeo = new THREE.PlaneGeometry(fillWidth, fillHeight);
-    fillGeo.translate(fillWidth / 2, 0, 0); // Pivot at left edge
+    // Discrete Blocks for Health Bar (20 blocks for BOSS, 3 blocks for normal)
+    const blockWidth = (totalBarWidth / numBlocks) * 0.82;
+    const blockHeight = 0.18 * scale;
+    const blockGap = (totalBarWidth / numBlocks) * 0.18;
+    const startX = -totalBarWidth / 2 + blockWidth / 2 + blockGap / 2;
 
-    const fillMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, side: THREE.DoubleSide });
-    const healthFill = new THREE.Mesh(fillGeo, fillMat);
-    healthFill.name = 'healthFill';
-    healthFill.position.set(-fillWidth / 2, 0, 0.002);
-    healthBarGroup.add(healthFill);
+    for (let i = 0; i < numBlocks; i++) {
+      const blockGeo = new THREE.PlaneGeometry(blockWidth, blockHeight);
+      const blockMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xcc00ff : 0x00ff66, side: THREE.DoubleSide });
+      const blockMesh = new THREE.Mesh(blockGeo, blockMat);
+      blockMesh.name = `healthBlock_${i}`;
+      blockMesh.position.set(startX + i * (blockWidth + blockGap), 0, 0.002);
+      healthBarGroup.add(blockMesh);
+    }
 
     group.add(healthBarGroup);
-
     group.position.set(zombie.position[0], zombie.position[1], zombie.position[2]);
     return group;
   };
@@ -741,11 +874,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Clear old targets
     targetsRef.current.forEach(t => removeTargetMesh(t.id));
     targetsRef.current = [];
 
-    // Target Positions in 360 degrees around origin
     const targetConfigs: { pos: [number, number, number]; speed?: number; axis?: 'x' | 'y' | 'z'; points: number }[] = [
       { pos: [0, 1.8, -8], points: 100 },
       { pos: [6, 2.2, -6], speed: 1.5, axis: 'x', points: 150 },
@@ -775,10 +906,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       targetsRef.current.push(targetData);
 
-      // Create 3D Mesh
       const targetGroup = new THREE.Group();
 
-      // Outer Red Ring
       const outerRing = new THREE.Mesh(
         new THREE.CylinderGeometry(0.6, 0.6, 0.08, 24),
         new THREE.MeshStandardMaterial({ color: 0xcc1122, roughness: 0.4 })
@@ -786,7 +915,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       outerRing.rotation.x = Math.PI / 2;
       targetGroup.add(outerRing);
 
-      // Middle White Ring
       const midRing = new THREE.Mesh(
         new THREE.CylinderGeometry(0.4, 0.4, 0.1, 24),
         new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.4 })
@@ -794,7 +922,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       midRing.rotation.x = Math.PI / 2;
       targetGroup.add(midRing);
 
-      // Bullseye Yellow Center
       const bullseye = new THREE.Mesh(
         new THREE.CylinderGeometry(0.2, 0.2, 0.12, 24),
         new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.2 })
@@ -803,7 +930,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       bullseye.name = 'bullseye';
       targetGroup.add(bullseye);
 
-      // Stand post
       const post = new THREE.Mesh(
         new THREE.CylinderGeometry(0.05, 0.05, cfg.pos[1], 12),
         new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 })
@@ -811,7 +937,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       post.position.y = -cfg.pos[1] / 2;
       targetGroup.add(post);
 
-      // Face player direction initially
       targetGroup.position.set(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
       targetGroup.lookAt(0, cfg.pos[1], 0);
 
@@ -836,34 +961,49 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
-  // --- ZOMBIE SPAWNING IN PLAY MODE ---
+  // --- ZOMBIE SPAWNING (Standard Red Dots & Boss at Orange Star every 3 waves) ---
   const spawnZombieInWave = () => {
     if (spawnedWaveZombiesRef.current >= totalWaveZombiesRef.current) return;
 
-    // Pick a random door from the 8 containment doors on the walls
-    const door = DOOR_SPAWNS[Math.floor(Math.random() * DOOR_SPAWNS.length)];
-    const x = door.x;
-    const z = door.z;
+    const isBossWave = wave % 3 === 0;
+    let isBossToSpawn = false;
+    if (isBossWave && !hasSpawnedBossInWaveRef.current) {
+      isBossToSpawn = true;
+      hasSpawnedBossInWaveRef.current = true;
+    }
 
-    // Determine zombie type based on wave
-    const rand = Math.random();
+    let x = 0;
+    let z = 0;
     let type: ZombieType = 'WALKER';
     let speed = 1.3 + wave * 0.15;
-    let maxHealth = 100;
-    let damage = 10; // Standard 10 HP loss per touch
+    let maxHealth = 150; // 3 normal shots (50 hp per shot)
+    let damage = 10;
 
-    if (wave >= 2 && rand > 0.6) {
-      type = 'RUNNER';
-      speed = 2.8 + wave * 0.2;
-      maxHealth = 60;
-    } else if (wave >= 3 && rand > 0.85) {
-      type = 'TANK';
-      speed = 0.8 + wave * 0.1;
-      maxHealth = 280;
-    } else if (wave >= 4 && rand > 0.7) {
-      type = 'STALKER';
-      speed = 2.0;
-      maxHealth = 90;
+    if (isBossToSpawn) {
+      // Boss Spawns at Orange Star (-12, 0)
+      x = ORANGE_BOSS_SPAWN.x;
+      z = ORANGE_BOSS_SPAWN.z;
+      type = 'BOSS';
+      speed = 1.1 + wave * 0.05;
+      maxHealth = 1000; // Takes 20 body shots (or 10 headshots!)
+      damage = 25;
+    } else {
+      // Standard zombies spawn at one of the 7 Red Dots
+      const redPoint = RED_ZOMBIE_SPAWNS[Math.floor(Math.random() * RED_ZOMBIE_SPAWNS.length)];
+      x = redPoint.x;
+      z = redPoint.z;
+
+      const rand = Math.random();
+      if (wave >= 2 && rand > 0.6) {
+        type = 'RUNNER';
+        speed = 2.8 + wave * 0.2;
+      } else if (wave >= 3 && rand > 0.85) {
+        type = 'TANK';
+        speed = 0.8 + wave * 0.1;
+      } else if (wave >= 4 && rand > 0.7) {
+        type = 'STALKER';
+        speed = 2.0;
+      }
     }
 
     const id = `zombie_${Date.now()}_${Math.random()}`;
@@ -875,21 +1015,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       maxHealth,
       speed,
       damage,
-      radius: type === 'TANK' ? 1.2 : 0.7,
+      radius: type === 'BOSS' ? 1.8 : type === 'TANK' ? 1.2 : 0.7,
       rotationY: 0,
       attackCooldown: 0,
       isAttacking: false,
       hitFlashTime: 0,
-      glowColor: type === 'RUNNER' ? '#ff3300' : '#00ff66',
+      glowColor: type === 'BOSS' ? '#aa00ff' : type === 'RUNNER' ? '#ff3300' : '#00ff66',
     };
 
     zombiesRef.current.push(zombie);
     spawnedWaveZombiesRef.current++;
 
-    // Play spatial door opening & spawn roar sound
     if (cameraRef.current) {
       soundManager.playDoorSpawnSound({ x, y: 0, z }, cameraRef.current.position, yawRef.current);
-      soundManager.playSpatialZombieGroan({ x, y: 1.0, z }, cameraRef.current.position, yawRef.current, type);
+      soundManager.playSpatialZombieGroan({ x, y: 1.0, z }, cameraRef.current.position, yawRef.current, type === 'BOSS' ? 'TANK' : type);
     }
 
     if (sceneRef.current) {
@@ -897,12 +1036,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       sceneRef.current.add(mesh);
       zombieMeshesRef.current.set(id, mesh);
 
-      // Play zombie groan on spawn
-      soundManager.playZombieGroan(type === 'TANK' ? 0.6 : type === 'RUNNER' ? 1.4 : 1.0);
+      soundManager.playZombieGroan(type === 'BOSS' ? 0.4 : type === 'TANK' ? 0.6 : type === 'RUNNER' ? 1.4 : 1.0);
     }
   };
 
-  // --- BLOOD & SPARK PARTICLES ---
+  // --- PARTICLES ---
   const createExplosionParticles = (pos: THREE.Vector3, color: string, count: number = 15) => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -946,14 +1084,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   };
 
-  // --- SHOOTING MECHANIC ---
+  // --- SHOOTING MECHANIC (Respects 30 ammo limit & Boss Headshot -2 HP rule) ---
   const handleShoot = () => {
     if (isPaused || !cameraRef.current || !sceneRef.current) return;
+
+    // AMMO CHECK: If 0 ammo, play empty click sound & refuse to shoot!
+    if (ammo <= 0) {
+      soundManager.playEmptyClick();
+      return;
+    }
 
     // Audio FX & Recoil
     soundManager.playGunshot();
     soundManager.playLaserZap();
-    recoilRef.current = 0.12; // Gun kickback
+    recoilRef.current = 0.12;
 
     // Muzzle Flash
     if (muzzleFlashLightRef.current && muzzleFlashMeshRef.current) {
@@ -974,13 +1118,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     let hitSomething = false;
 
     if (mode === 'PLAY') {
-      // Check hits against zombies
       let closestHitDist = Infinity;
       let hitZombieId: string | null = null;
       let isHeadshot = false;
       let hitPoint: THREE.Vector3 | null = null;
 
       zombiesRef.current.forEach(z => {
+        if (z.isDead) return;
         const meshGroup = zombieMeshesRef.current.get(z.id);
         if (!meshGroup) return;
 
@@ -1001,24 +1145,46 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const zIndex = zombiesRef.current.findIndex(z => z.id === hitZombieId);
         if (zIndex !== -1) {
           const z = zombiesRef.current[zIndex];
-          // Headshots are an instant kill! Body shots deal 50 damage
-          const damage = isHeadshot ? z.maxHealth + 999 : 50;
-          z.health -= damage;
-          z.hitFlashTime = Date.now();
+          if (!z.isDead) {
+            // BOSS ZOMBIE RULE:
+            // "being able to take 20 shots, headshots do -2hp for him, boss will be a big purple zombie"
+            // Body shot = 50 damage (1 shot = -1 block out of 20)
+            // Headshot on Boss = 100 damage (2 shots = -2 blocks out of 20)
+            // Standard Zombie: Headshot = instant kill, Body shot = 50 damage
+            let damage = 50;
+            if (z.type === 'BOSS') {
+              damage = isHeadshot ? 100 : 50; // Headshot does -2 HP (100 damage out of 1000)
+            } else {
+              damage = isHeadshot ? z.maxHealth + 999 : 50;
+            }
 
-          soundManager.playZombieHit();
-          createExplosionParticles(hitPoint, isHeadshot ? '#ff2200' : '#e2e8f0', isHeadshot ? 30 : 15);
+            z.health -= damage;
+            z.hitFlashTime = Date.now();
 
-          if (z.health <= 0) {
-            // Zombie Killed!
-            createExplosionParticles(hitPoint, isHeadshot ? '#ff0000' : '#ffffff', 45);
-            onZombieKill(z.id, isHeadshot);
-            finalizeZombieRemoval(z.id);
+            soundManager.playZombieHit();
+            createExplosionParticles(hitPoint, isHeadshot ? '#ff2200' : '#e2e8f0', isHeadshot ? 30 : 15);
+
+            if (z.health <= 0) {
+              z.health = 0;
+              z.isDead = true;
+              z.deathTime = Date.now();
+
+              const meshGroup = zombieMeshesRef.current.get(z.id);
+              if (meshGroup) {
+                meshGroup.children.forEach(child => {
+                  if (child.name !== 'healthBarGroup') {
+                    child.visible = false;
+                  }
+                });
+              }
+
+              createExplosionParticles(hitPoint, z.type === 'BOSS' ? '#aa00ff' : isHeadshot ? '#ff0000' : '#ffffff', 50);
+              onZombieKill(z.id, isHeadshot);
+            }
           }
         }
       }
     } else if (mode === 'PRACTICE') {
-      // Check hits against practice targets
       let closestHitDist = Infinity;
       let hitTargetId: string | null = null;
       let isBullseye = false;
@@ -1046,7 +1212,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         createExplosionParticles(hitPoint, isBullseye ? '#ffcc00' : '#ffffff', 20);
         onTargetHit(hitTargetId, isBullseye);
 
-        // Respawn / animate target hit reaction
         const targetGroup = targetMeshesRef.current.get(hitTargetId);
         if (targetGroup) {
           targetGroup.rotation.x += Math.PI / 4;
@@ -1060,9 +1225,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     onShotFired(hitSomething);
   };
 
-  // --- DESKTOP FALLBACK LOOK & CLICK TO SHOOT ---
+  // --- DESKTOP FALLBACK LOOK ---
   const handlePointerMove = (e: React.PointerEvent) => {
-    // If real mobile gyro sensors are active, do not allow desktop drag look
     if (hasGyroSensorRef.current && settings.gyroEnabled) return;
 
     if (e.buttons === 1 || e.pointerType === 'mouse') {
@@ -1093,32 +1257,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       // 1. UPDATE CAMERA ROTATION
       if (hasGyroSensorRef.current && settings.gyroEnabled) {
-        // Direct Gyroscope Device Motion Orientation
         camera.quaternion.copy(deviceQuatRef.current);
 
-        // Derive current look direction for raycasting & warning overlays
         const lookDir = new THREE.Vector3();
         camera.getWorldDirection(lookDir);
         yawRef.current = Math.atan2(-lookDir.x, -lookDir.z);
         pitchRef.current = Math.asin(THREE.MathUtils.clamp(lookDir.y, -0.98, 0.98));
       } else {
-        // Desktop / Preview Fallback (when no motion sensors exist)
         const euler = new THREE.Euler(0, 0, 0, 'YXZ');
         euler.x = pitchRef.current;
         euler.y = yawRef.current;
         camera.quaternion.setFromEuler(euler);
       }
 
-      // 1.5 PLAYER WALKING MOVEMENT (Virtual Joystick + WASD / Arrow Keys)
-      const jx = joystickVectorRef.current.x; // [-1, 1]
-      const jy = joystickVectorRef.current.y; // [-1, 1]
+      // 1.5 PLAYER WALKING MOVEMENT
+      const jx = joystickVectorRef.current.x;
+      const jy = joystickVectorRef.current.y;
 
       const moveFwdKey = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'];
       const moveBackKey = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
       const moveLeftKey = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
       const moveRightKey = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
 
-      let fwdInput = -jy; // Pushing joystick up (jy < 0) yields positive forward input
+      let fwdInput = -jy;
       if (moveFwdKey) fwdInput += 1;
       if (moveBackKey) fwdInput -= 1;
 
@@ -1146,7 +1307,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         camera.position.addScaledVector(moveVec, moveSpeed * delta);
 
-        // Natural head bobbing while walking
         walkDistanceRef.current += delta * moveSpeed * moveVec.length();
         const headBob = Math.sin(walkDistanceRef.current * 10) * 0.04;
         camera.position.y = 1.6 + headBob;
@@ -1154,34 +1314,53 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         camera.position.y = THREE.MathUtils.lerp(camera.position.y, 1.6, 0.1);
       }
 
-      // Prevent player from walking through solid crates/boxes
-      resolveCrateCollisions(camera.position, 0.5);
+      // Prevent player from walking through interior map walls & crates
+      resolveMapCollisions(camera.position, 0.5);
 
-      // Keep player strictly inside room boundaries
+      // Outer room boundaries
       camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
       camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
+
+      // 1.8 GREEN RELOAD ZONE LOGIC (Bottom-Right: x: 7.5 to 13.5, z: 3.5 to 9.5)
+      if (mode === 'PLAY') {
+        const px = camera.position.x;
+        const pz = camera.position.z;
+        if (px >= 7.5 && px <= 13.5 && pz >= 3.5 && pz <= 9.5) {
+          if (ammo < 30) {
+            reloadTimeRef.current += delta;
+            if (reloadTimeRef.current >= 2.0) {
+              soundManager.playReloadComplete();
+              onReloadProgress(2.0, true); // Refills ammo to 30
+              reloadTimeRef.current = 0;
+            } else {
+              onReloadProgress(reloadTimeRef.current, false);
+            }
+          } else {
+            reloadTimeRef.current = 0;
+            onReloadProgress(0, false);
+          }
+        } else {
+          if (reloadTimeRef.current > 0) {
+            reloadTimeRef.current = 0;
+            onReloadProgress(0, false);
+          }
+        }
+      }
 
       // Recoil Recovery
       if (recoilRef.current > 0) {
         pitchRef.current += recoilRef.current * 0.3;
-        recoilRef.current -= delta * 0.8;
-        if (recoilRef.current < 0) recoilRef.current = 0;
+        recoilRef.current = Math.max(0, recoilRef.current - delta * 1.5);
       }
 
-      // 2. GUN RECOIL & LASER RAYCAST
-      if (gunGroupRef.current) {
-        gunGroupRef.current.position.z = -0.42 + recoilRef.current * 0.15;
-      }
-
-      // Laser Raycast to calculate beam length & laser dot position
+      // 2. LASER BEAM TARGETING
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
 
-      let laserDist = 25; // max laser range
+      let laserDist = 25;
       if (intersects.length > 0) {
         for (const hit of intersects) {
-          // Ignore laser beam itself
           if (hit.object !== laserMeshRef.current) {
             laserDist = hit.distance;
             break;
@@ -1195,7 +1374,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       // 3. PLAY MODE: ZOMBIE AI & SPAWNING
       if (mode === 'PLAY') {
-        // Spawn zombies periodically if needed
         if (
           spawnedWaveZombiesRef.current < totalWaveZombiesRef.current &&
           currentTime - lastSpawnTimeRef.current > Math.max(1200, 3200 - wave * 300)
@@ -1205,17 +1383,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
 
         const playerPos = camera.position.clone();
-        playerPos.y = 0; // floor projection
+        playerPos.y = 0;
         const warnings: DirectionalWarning[] = [];
         const idsToRemove: string[] = [];
         let minZombieDist = Infinity;
         let closestDx = 0;
         let closestDz = 0;
 
-        // Update Zombies
         zombiesRef.current.forEach(z => {
           const meshGroup = zombieMeshesRef.current.get(z.id);
           if (!meshGroup) return;
+
+          if (z.isDead) {
+            if (currentTime - (z.deathTime || 0) >= 3000) {
+              idsToRemove.push(z.id);
+            }
+
+            const healthBar = meshGroup.getObjectByName('healthBarGroup');
+            if (healthBar && cameraRef.current) {
+              healthBar.lookAt(cameraRef.current.position);
+
+              const numBlocks = z.type === 'BOSS' ? 20 : 3;
+              for (let i = 0; i < numBlocks; i++) {
+                const blockMesh = healthBar.getObjectByName(`healthBlock_${i}`) as THREE.Mesh;
+                if (blockMesh) {
+                  blockMesh.visible = true;
+                  (blockMesh.material as THREE.MeshBasicMaterial).color.setHex(0x555566);
+                }
+              }
+            }
+            return;
+          }
 
           const zPos = new THREE.Vector3(z.position[0], 0, z.position[2]);
           const dirToPlayer = new THREE.Vector3().subVectors(playerPos, zPos).normalize();
@@ -1230,20 +1428,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             closestDz = dz;
           }
 
-          // Rotate Zombie towards player's position
           meshGroup.lookAt(playerPos.x, meshGroup.position.y, playerPos.z);
 
-          // Move Zombie toward player
           if (distToPlayer > z.radius) {
             z.position[0] += dirToPlayer.x * z.speed * delta;
             z.position[2] += dirToPlayer.z * z.speed * delta;
 
-            // Resolve crate collision for zombies
-            resolveCrateCollisions({ x: z.position[0], z: z.position[2] }, z.radius);
+            resolveMapCollisions({ x: z.position[0], z: z.position[2] }, z.radius);
 
             meshGroup.position.set(z.position[0], 0, z.position[2]);
 
-            // Walking limb wobble animation
             const time = currentTime * 0.006 * z.speed;
             const leftArm = meshGroup.getObjectByName('leftArm');
             const rightArm = meshGroup.getObjectByName('rightArm');
@@ -1255,37 +1449,48 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             if (leftLeg) leftLeg.rotation.x = Math.sin(time) * 0.4;
             if (rightLeg) rightLeg.rotation.x = -Math.sin(time) * 0.4;
           } else {
-            // Zombie reached player (TOUCHED PLAYER)!
             if (currentTime - z.attackCooldown > 1200) {
               z.attackCooldown = currentTime;
               soundManager.playZombieAttack();
-              onPlayerHit(z.damage); // take damage
-              
-              // Zombie disappears after attacking
+              onPlayerHit(z.damage);
+
               createExplosionParticles(meshGroup.position, '#ffffff', 25);
               idsToRemove.push(z.id);
             }
           }
 
-          // Billboard and update 3D floating Health Bar
+          // Billboard 3D floating Health Bar to face camera
           const healthBar = meshGroup.getObjectByName('healthBarGroup');
           if (healthBar && cameraRef.current) {
-            healthBar.quaternion.copy(cameraRef.current.quaternion);
+            healthBar.lookAt(cameraRef.current.position);
 
-            const healthFill = healthBar.getObjectByName('healthFill') as THREE.Mesh;
-            if (healthFill) {
-              const pct = Math.max(0, Math.min(1, z.health / z.maxHealth));
-              healthFill.scale.x = pct;
+            const numBlocks = z.type === 'BOSS' ? 20 : 3;
+            const blocksLeft = Math.max(0, Math.min(numBlocks, Math.ceil((z.health / z.maxHealth) * numBlocks)));
 
-              const mat = healthFill.material as THREE.MeshBasicMaterial;
-              if (pct > 0.5) mat.color.setHex(0x00ff66); // Bright green
-              else if (pct > 0.25) mat.color.setHex(0xffbb00); // Yellow/Orange
-              else mat.color.setHex(0xff2200); // Red
+            let colorHex = z.type === 'BOSS' ? 0xcc00ff : 0x00ff66;
+            if (blocksLeft <= numBlocks / 3) colorHex = 0xff2200;
+            else if (blocksLeft <= (numBlocks * 2) / 3) colorHex = 0xffcc00;
+            if (blocksLeft === 0) colorHex = 0x555566;
+
+            for (let i = 0; i < numBlocks; i++) {
+              const blockMesh = healthBar.getObjectByName(`healthBlock_${i}`) as THREE.Mesh;
+              if (blockMesh) {
+                const mat = blockMesh.material as THREE.MeshBasicMaterial;
+                if (blocksLeft === 0) {
+                  blockMesh.visible = true;
+                  mat.color.setHex(0x555566);
+                } else if (i < blocksLeft) {
+                  blockMesh.visible = true;
+                  mat.color.setHex(colorHex);
+                } else {
+                  blockMesh.visible = true;
+                  mat.color.setHex(0x22222a);
+                }
+              }
             }
           }
 
-          // Calculate directional warning for HUD radar relative to player position
-          const angleToZombie = Math.atan2(dx, -dz); // angle relative to north
+          const angleToZombie = Math.atan2(dx, -dz);
           let relAngle = angleToZombie - yawRef.current;
           while (relAngle > Math.PI) relAngle -= Math.PI * 2;
           while (relAngle < -Math.PI) relAngle += Math.PI * 2;
@@ -1299,15 +1504,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           warnings.push({ direction: dirName, angle: relAngle, distance: distToPlayer });
         });
 
-        // Update Proximity Zombie Buzz audio (volume increases as zombie gets closer)
         soundManager.updateZombieBuzz(minZombieDist, closestDx, closestDz, yawRef.current);
-
-        // Process removals for zombies that attacked
         idsToRemove.forEach(id => finalizeZombieRemoval(id));
-
         onDirectionalUpdate(warnings);
 
-        // Periodic Spatial Zombie Sound Effects (Spatial groans/screeches relative to player position and orientation)
         if (currentTime - lastSpatialGroanTimeRef.current > 1800 && zombiesRef.current.length > 0) {
           lastSpatialGroanTimeRef.current = currentTime + Math.floor(Math.random() * 600 - 300);
           const randomZombie = zombiesRef.current[Math.floor(Math.random() * zombiesRef.current.length)];
@@ -1316,19 +1516,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               { x: randomZombie.position[0], y: 1.0, z: randomZombie.position[2] },
               camera.position,
               yawRef.current,
-              randomZombie.type
+              randomZombie.type === 'BOSS' ? 'TANK' : randomZombie.type
             );
           }
         }
 
-        // Low HP Heartbeat
         if (hp < 50 && currentTime - heartbeatTimerRef.current > 900) {
           heartbeatTimerRef.current = currentTime;
           soundManager.playHeartbeat();
         }
       }
 
-      // 4. PRACTICE MODE: MOVING TARGETS
+      // 4. PRACTICE MODE
       if (mode === 'PRACTICE') {
         soundManager.updateZombieBuzz(Infinity);
         targetsRef.current.forEach(t => {
@@ -1358,7 +1557,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const p = particlesRef.current[i];
         p.life += delta;
         p.mesh.position.addScaledVector(p.vel, delta);
-        p.vel.y -= 9.8 * delta; // Gravity
+        p.vel.y -= 9.8 * delta;
 
         if (p.life >= p.maxLife) {
           scene.remove(p.mesh);
@@ -1372,7 +1571,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     animationFrameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [mode, isPaused, wave, hp]);
+  }, [mode, isPaused, wave, hp, ammo]);
 
   return (
     <div
@@ -1401,15 +1600,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           onPointerUp={handleJoystickPointerUp}
           onPointerCancel={handleJoystickPointerUp}
         >
-          {/* Joystick Base Outer Ring */}
           <div className={`relative w-28 h-28 rounded-full border-2 ${isJoystickActive ? 'border-[#ff3300] bg-black/80 shadow-[0_0_20px_rgba(255,51,0,0.4)]' : 'border-white/40 bg-black/60'} backdrop-blur-md flex items-center justify-center shadow-2xl transition-colors`}>
-            {/* Direction Arrow Helpers */}
             <div className="absolute top-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▲</div>
             <div className="absolute bottom-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▼</div>
             <div className="absolute left-1.5 text-[9px] text-white/50 font-mono pointer-events-none">◄</div>
             <div className="absolute right-1.5 text-[9px] text-white/50 font-mono pointer-events-none">►</div>
-            
-            {/* Draggable Knob */}
+
             <div
               className={`w-12 h-12 rounded-full ${isJoystickActive ? 'bg-[#ff3300] shadow-[0_0_15px_#ff3300]' : 'bg-white/90'} border-2 border-white transition-transform duration-75 ease-out flex items-center justify-center pointer-events-none`}
               style={{
@@ -1421,7 +1617,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           </div>
         </div>
       )}
-
     </div>
   );
 };

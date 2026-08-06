@@ -1,6 +1,6 @@
 export type GameMode = 'HOME' | 'PLAY' | 'PRACTICE';
 
-export type ZombieType = 'WALKER' | 'RUNNER' | 'TANK' | 'STALKER';
+export type ZombieType = 'WALKER' | 'RUNNER' | 'TANK' | 'STALKER' | 'BOSS';
 
 export interface Zombie {
   id: string;
@@ -16,6 +16,8 @@ export interface Zombie {
   isAttacking: boolean;
   hitFlashTime: number; // timestamp for red flash
   glowColor: string;
+  isDead?: boolean;
+  deathTime?: number;
 }
 
 export interface Target {
@@ -45,6 +47,9 @@ export interface Particle {
 export interface PlayerStats {
   hp: number;
   maxHp: number;
+  ammo: number;
+  maxAmmo: number;
+  reloadTimeInZone: number; // 0 to 2 seconds
   kills: number;
   wave: number;
   score: number;

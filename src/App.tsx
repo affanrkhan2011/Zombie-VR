@@ -10,6 +10,9 @@ export default function App() {
   const [stats, setStats] = useState<PlayerStats>({
     hp: 150,
     maxHp: 150,
+    ammo: 30,
+    maxAmmo: 30,
+    reloadTimeInZone: 0,
     kills: 0,
     wave: 1,
     score: 0,
@@ -73,6 +76,9 @@ export default function App() {
     setStats({
       hp: 150,
       maxHp: 150,
+      ammo: 30,
+      maxAmmo: 30,
+      reloadTimeInZone: 0,
       kills: 0,
       wave: 1,
       score: 0,
@@ -128,12 +134,21 @@ export default function App() {
     }));
   };
 
-  // Shot Fired Track Stats
+  // Shot Fired Track Stats & Ammo
   const handleShotFired = (hitSomething: boolean) => {
     setStats(prev => ({
       ...prev,
+      ammo: Math.max(0, prev.ammo - 1),
       shotsFired: prev.shotsFired + 1,
       shotsHit: hitSomething ? prev.shotsHit + 1 : prev.shotsHit,
+    }));
+  };
+
+  const handleReloadProgress = (progressTime: number, isRefilled: boolean) => {
+    setStats(prev => ({
+      ...prev,
+      reloadTimeInZone: progressTime,
+      ammo: isRefilled ? prev.maxAmmo : prev.ammo,
     }));
   };
 
@@ -185,11 +200,13 @@ export default function App() {
             isPaused={isPaused}
             wave={stats.wave}
             hp={stats.hp}
+            ammo={stats.ammo}
             recenterSignal={recenterSignal}
             onPlayerHit={handlePlayerHit}
             onZombieKill={handleZombieKill}
             onTargetHit={handleTargetHit}
             onShotFired={handleShotFired}
+            onReloadProgress={handleReloadProgress}
             onDirectionalUpdate={setWarnings}
             onWaveClear={handleWaveClear}
           />

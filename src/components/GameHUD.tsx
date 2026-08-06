@@ -56,6 +56,31 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
       )}
 
+      {/* RELOAD ZONE & AMMO NOTIFICATIONS */}
+      {mode === 'PLAY' && !isPaused && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 pointer-events-none z-20 font-mono text-center">
+          {stats.reloadTimeInZone > 0 && stats.ammo < stats.maxAmmo && (
+            <div className="bg-emerald-950/90 border border-emerald-500/80 px-4 py-2 rounded-md shadow-[0_0_20px_rgba(16,185,129,0.3)] backdrop-blur-sm animate-pulse">
+              <div className="text-emerald-400 font-bold text-sm tracking-wider uppercase">⚡ RELOADING IN GREEN ZONE</div>
+              <div className="w-36 h-2 bg-emerald-950 rounded-full mt-1.5 overflow-hidden border border-emerald-600/50">
+                <div
+                  className="h-full bg-emerald-400 transition-all duration-100"
+                  style={{ width: `${(stats.reloadTimeInZone / 2.0) * 100}%` }}
+                ></div>
+              </div>
+              <div className="text-[10px] text-emerald-300 mt-0.5">{stats.reloadTimeInZone.toFixed(1)}s / 2.0s</div>
+            </div>
+          )}
+
+          {stats.ammo === 0 && stats.reloadTimeInZone === 0 && (
+            <div className="bg-red-950/90 border border-red-500/80 px-4 py-2 rounded-md shadow-[0_0_20px_rgba(239,68,68,0.4)] backdrop-blur-sm animate-bounce">
+              <div className="text-red-400 font-extrabold text-sm tracking-wider uppercase">⚠️ OUT OF AMMO</div>
+              <div className="text-[11px] text-zinc-300 mt-0.5">HEAD TO GREEN RELOAD ZONE (BOTTOM-RIGHT)</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* DANGER / SPATIAL WARNING TEXT */}
       {mode === 'PLAY' && !isPaused && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20 font-mono">
@@ -79,19 +104,38 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* TOP BAR HUD */}
       <div className="flex items-start justify-between w-full pointer-events-auto gap-2 font-mono">
-        {/* PLAYER HEALTH BAR */}
-        <div className="flex flex-col min-w-[140px] sm:min-w-[200px]">
-          <div className="flex justify-between items-end mb-1">
-            <span className="text-[#ff3300] uppercase text-xs">HP</span>
-            <span className={`text-xl leading-none ${stats.hp <= 30 ? 'text-[#ff3300] animate-pulse' : 'text-white'}`}>
-              {stats.hp}
-            </span>
+        {/* PLAYER HEALTH & AMMO BARS */}
+        <div className="flex flex-col gap-2 min-w-[140px] sm:min-w-[200px]">
+          {/* HP Bar */}
+          <div className="flex flex-col">
+            <div className="flex justify-between items-end mb-1">
+              <span className="text-[#ff3300] uppercase text-xs">HP</span>
+              <span className={`text-xl leading-none ${stats.hp <= 30 ? 'text-[#ff3300] animate-pulse' : 'text-white'}`}>
+                {stats.hp}
+              </span>
+            </div>
+            <div className="w-full bg-zinc-900 h-1">
+              <div
+                className={`h-full transition-all duration-300 ${stats.hp <= 30 ? 'bg-[#ff3300]' : 'bg-white'}`}
+                style={{ width: `${hpPercent}%` }}
+              ></div>
+            </div>
           </div>
-          <div className="w-full bg-zinc-900 h-1">
-            <div
-              className={`h-full transition-all duration-300 ${stats.hp <= 30 ? 'bg-[#ff3300]' : 'bg-white'}`}
-              style={{ width: `${hpPercent}%` }}
-            ></div>
+
+          {/* AMMO Bar */}
+          <div className="flex flex-col">
+            <div className="flex justify-between items-end mb-0.5">
+              <span className="text-emerald-400 uppercase text-[10px]">AMMO</span>
+              <span className={`text-base font-bold leading-none ${stats.ammo === 0 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>
+                {stats.ammo} / {stats.maxAmmo}
+              </span>
+            </div>
+            <div className="w-full bg-zinc-900 h-1 overflow-hidden rounded-full">
+              <div
+                className={`h-full transition-all duration-150 ${stats.ammo === 0 ? 'bg-red-500' : 'bg-emerald-400'}`}
+                style={{ width: `${(stats.ammo / stats.maxAmmo) * 100}%` }}
+              ></div>
+            </div>
           </div>
         </div>
 
