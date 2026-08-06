@@ -1,0 +1,6 @@
+{
+  "name": "Zombie VR Survival",
+  "description": "A thrilling 360-degree dark horror VR-style mobile web shooter with Practice and Wave Survival modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
