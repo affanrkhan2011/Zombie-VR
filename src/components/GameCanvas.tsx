@@ -582,46 +582,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Color Bug Fix:
     // Dark mode (isLightWave === false): White/Pale zombies
     // Light mode (isLightWave === true): Black/Dark Charcoal zombies
-    let bodyColor: number;
-    let clothesColor: number;
+    // Vibrant Orange Zombie Colors
+    let bodyColor = 0xff6600; // Vibrant Orange for WALKER
+    let clothesColor = 0xcc5200; // Darker burnt orange
     let scale = 1.0;
 
-    if (isLightWave) {
-      // LIGHT MODE: Black / Dark Charcoal zombies
-      bodyColor = 0x111111;
-      clothesColor = 0x222222;
-
-      if (zombie.type === 'RUNNER') {
-        bodyColor = 0x200808; // Dark blood black
-        clothesColor = 0x181818;
-        scale = 0.88;
-      } else if (zombie.type === 'TANK') {
-        bodyColor = 0x0a0a0a; // Obsidian jet black
-        clothesColor = 0x1a1a1a;
-        scale = 1.5;
-      } else if (zombie.type === 'STALKER') {
-        bodyColor = 0x0e121a; // Dark shadow blue-black
-        clothesColor = 0x181a22;
-        scale = 1.05;
-      }
-    } else {
-      // DARK MODE: White / Pale Bone zombies
-      bodyColor = 0xffffff;
-      clothesColor = 0xe0e0e0;
-
-      if (zombie.type === 'RUNNER') {
-        bodyColor = 0xfff0f0; // Pale blood-tinted white
-        clothesColor = 0xd5c5c5;
-        scale = 0.88;
-      } else if (zombie.type === 'TANK') {
-        bodyColor = 0xe6e6e6; // Heavy bone white
-        clothesColor = 0xcccccc;
-        scale = 1.5;
-      } else if (zombie.type === 'STALKER') {
-        bodyColor = 0xf0f8ff; // Ghostly silver white
-        clothesColor = 0xd8e0e8;
-        scale = 1.05;
-      }
+    if (zombie.type === 'RUNNER') {
+      bodyColor = 0xff3300; // Fiery red-orange
+      clothesColor = 0xb32400;
+      scale = 0.88;
+    } else if (zombie.type === 'TANK') {
+      bodyColor = 0xe65c00; // Deep heavy amber-orange
+      clothesColor = 0x993d00;
+      scale = 1.5;
+    } else if (zombie.type === 'STALKER') {
+      bodyColor = 0xff8800; // Bright neon orange
+      clothesColor = 0xb35900;
+      scale = 1.05;
     }
 
     // Bright materials with subtle emissive component for dark visibility
