@@ -8,6 +8,15 @@ class SoundManager {
   private ambientOsc2: OscillatorNode | null = null;
   private heartbeatInterval: number | null = null;
 
+  // Proximity Zombie Buzz Audio Nodes
+  private buzzOsc1: OscillatorNode | null = null;
+  private buzzOsc2: OscillatorNode | null = null;
+  private buzzLfo: OscillatorNode | null = null;
+  private buzzLfoGain: GainNode | null = null;
+  private buzzGain: GainNode | null = null;
+  private buzzFilter: BiquadFilterNode | null = null;
+  private buzzPanner: AudioNode | null = null;
+
   constructor() {
     // AudioContext will be initialized on first user click/touch
   }
@@ -254,7 +263,7 @@ class SoundManager {
     });
   }
 
-  // Dark Ambient Horror Drone (Disabled buzzing sound)
+  // Dark Ambient Horror Drone
   public startAmbientDrone() {
     this.stopAmbientDrone();
   }
@@ -278,6 +287,127 @@ class SoundManager {
       }
       this.ambientOsc2 = null;
     }
+  }
+
+  // --- PROXIMITY ZOMBIE BUZZING SOUND ---
+  // Dynamically adjusts volume, pitch cutoff, growl rate, and panning based on distance to closest zombie
+  public updateZombieBuzz(minDist: number, dx: number = 0, dz: number = 0, yaw: number = 0) {
+    if (this.isMuted) {
+      if (this.buzzGain && this.ctx) {
+        this.buzzGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
+      }
+      return;
+    }
+
+    if (!isFinite(minDist) || minDist > 18) {
+      if (this.buzzGain && this.ctx) {
+        this.buzzGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      }
+      return;
+    }
+
+    this.initCtx();
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Lazy initialize persistent buzz synthesizer node graph
+    if (!this.buzzOsc1) {
+      this.buzzGain = ctx.createGain();
+      this.buzzGain.gain.setValueAtTime(0, now);
+
+      this.buzzFilter = ctx.createBiquadFilter();
+      this.buzzFilter.type = 'lowpass';
+      this.buzzFilter.frequency.setValueAtTime(140, now);
+
+      // Dual sawtooth/square oscillators for a raspy horror buzz
+      this.buzzOsc1 = ctx.createOscillator();
+      this.buzzOsc1.type = 'sawtooth';
+      this.buzzOsc1.frequency.setValueAtTime(60, now); // Low base pitch
+
+      this.buzzOsc2 = ctx.createOscillator();
+      this.buzzOsc2.type = 'square';
+      this.buzzOsc2.frequency.setValueAtTime(63.5, now); // Detuned for beating hum
+
+      // Tremolo LFO for throbbing growl
+      this.buzzLfo = ctx.createOscillator();
+      this.buzzLfo.frequency.setValueAtTime(4, now);
+
+      this.buzzLfoGain = ctx.createGain();
+      this.buzzLfoGain.gain.setValueAtTime(15, now);
+      this.buzzLfo.connect(this.buzzLfoGain);
+      this.buzzLfoGain.connect(this.buzzOsc1.frequency);
+
+      this.buzzOsc1.connect(this.buzzFilter);
+      this.buzzOsc2.connect(this.buzzFilter);
+
+      if (typeof (ctx as any).createStereoPanner === 'function') {
+        const panner = (ctx as any).createStereoPanner();
+        this.buzzFilter.connect(panner);
+        panner.connect(this.buzzGain);
+        this.buzzPanner = panner;
+      } else {
+        this.buzzFilter.connect(this.buzzGain);
+        this.buzzPanner = this.buzzFilter;
+      }
+
+      this.buzzGain.connect(ctx.destination);
+
+      this.buzzLfo.start(now);
+      this.buzzOsc1.start(now);
+      this.buzzOsc2.start(now);
+    }
+
+    // Proximity factor [0.0 = far/18m, 1.0 = super close/0.5m]
+    const MAX_DIST = 18.0;
+    const prox = Math.max(0, Math.min(1, (MAX_DIST - minDist) / (MAX_DIST - 0.5)));
+
+    // Volume curves up as zombie gets closer
+    const targetVol = Math.pow(prox, 1.2) * 0.42;
+
+    // Cutoff frequency opens up as zombie gets close (from muffled bass to intense raspy buzz)
+    const targetCutoff = 140 + prox * 710;
+
+    // LFO throbbing speeds up with urgency (3 Hz to 12 Hz)
+    const targetLfoRate = 3 + prox * 9;
+
+    // Stereo Panning relative to player orientation
+    let panVal = 0;
+    if (dx !== 0 || dz !== 0) {
+      const angleToZombie = Math.atan2(dx, -dz);
+      let relAngle = angleToZombie - yaw;
+      while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+      while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+      panVal = Math.sin(relAngle);
+    }
+
+    // Apply audio parameter updates with smooth time constant transitions
+    this.buzzGain.gain.setTargetAtTime(targetVol, now, 0.08);
+    this.buzzFilter.frequency.setTargetAtTime(targetCutoff, now, 0.08);
+    if (this.buzzLfo) {
+      this.buzzLfo.frequency.setTargetAtTime(targetLfoRate, now, 0.08);
+    }
+    if (this.buzzPanner && 'pan' in this.buzzPanner) {
+      (this.buzzPanner as any).pan.setTargetAtTime(panVal, now, 0.08);
+    }
+  }
+
+  public stopZombieBuzz() {
+    if (this.buzzOsc1) {
+      try { this.buzzOsc1.stop(); this.buzzOsc1.disconnect(); } catch {}
+      this.buzzOsc1 = null;
+    }
+    if (this.buzzOsc2) {
+      try { this.buzzOsc2.stop(); this.buzzOsc2.disconnect(); } catch {}
+      this.buzzOsc2 = null;
+    }
+    if (this.buzzLfo) {
+      try { this.buzzLfo.stop(); this.buzzLfo.disconnect(); } catch {}
+      this.buzzLfo = null;
+    }
+    this.buzzGain = null;
+    this.buzzFilter = null;
+    this.buzzPanner = null;
   }
 
   // --- SPATIAL ZOMBIE SOUND EFFECTS ---

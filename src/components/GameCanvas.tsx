@@ -35,6 +35,48 @@ const DOOR_SPAWNS = [
   { id: 'east_bottom', x: 14.8, y: 0, z: 7.5, rotY: -Math.PI / 2 },
 ];
 
+// Solid Obstacle Crates / Boxes in the arena
+const CRATE_BOXES = [
+  { x: -10, z: -10, width: 2, depth: 2 },
+  { x: 11, z: -8, width: 2, depth: 2 },
+  { x: -9, z: 11, width: 2, depth: 2 },
+  { x: 10, z: 10, width: 2, depth: 2 },
+  { x: -12, z: 2, width: 2, depth: 2 },
+  { x: 12, z: -3, width: 2, depth: 2 },
+  { x: 3, z: -12, width: 2, depth: 2 },
+  { x: -4, z: 12, width: 2, depth: 2 },
+];
+
+// Helper function to resolve player/zombie collisions against solid crates
+const resolveCrateCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
+  CRATE_BOXES.forEach(c => {
+    const halfW = c.width / 2;
+    const halfD = c.depth / 2;
+    const minX = c.x - halfW;
+    const maxX = c.x + halfW;
+    const minZ = c.z - halfD;
+    const maxZ = c.z + halfD;
+
+    const closestX = THREE.MathUtils.clamp(pos.x, minX, maxX);
+    const closestZ = THREE.MathUtils.clamp(pos.z, minZ, maxZ);
+
+    const dx = pos.x - closestX;
+    const dz = pos.z - closestZ;
+    const distSq = dx * dx + dz * dz;
+
+    if (distSq < radius * radius) {
+      const dist = Math.sqrt(distSq);
+      if (dist > 0.0001) {
+        const overlap = radius - dist;
+        pos.x += (dx / dist) * overlap;
+        pos.z += (dz / dist) * overlap;
+      } else {
+        pos.x += radius;
+      }
+    }
+  });
+};
+
 interface GameCanvasProps {
   mode: GameMode;
   settings: GameSettings;
@@ -302,6 +344,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
       soundManager.stopAmbientDrone();
+      soundManager.stopZombieBuzz();
       if (rendererRef.current && rendererRef.current.domElement) {
         rendererRef.current.domElement.remove();
       }
@@ -521,13 +564,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wall: wallMat,
       crate: crateMat
     };
-    const cratePositions = [
-      [-10, 1, -10], [11, 1, -8], [-9, 1, 11], [10, 1, 10],
-      [-12, 1.2, 2], [12, 1.2, -3], [3, 0.8, -12], [-4, 0.8, 12]
-    ];
-    cratePositions.forEach(([cx, cy, cz]) => {
-      const crate = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), crateMat);
-      crate.position.set(cx, cy, cz);
+    CRATE_BOXES.forEach(c => {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(c.width, 2, c.depth), crateMat);
+      crate.position.set(c.x, 1, c.z);
       crate.castShadow = true;
       crate.receiveShadow = true;
       scene.add(crate);
@@ -665,6 +704,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     rightLeg.position.set(0.18 * scale, 0.4 * scale, 0);
     rightLeg.name = 'rightLeg';
     group.add(rightLeg);
+
+    // 3D Floating Health Bar above zombie head
+    const healthBarGroup = new THREE.Group();
+    healthBarGroup.name = 'healthBarGroup';
+    healthBarGroup.position.set(0, 2.15 * scale, 0);
+
+    const barBgMat = new THREE.MeshBasicMaterial({ color: 0x111116, side: THREE.DoubleSide });
+    const barBg = new THREE.Mesh(new THREE.PlaneGeometry(0.9 * scale, 0.12 * scale), barBgMat);
+    healthBarGroup.add(barBg);
+
+    const barBorderMat = new THREE.MeshBasicMaterial({ color: 0x444450, side: THREE.DoubleSide });
+    const barBorder = new THREE.Mesh(new THREE.PlaneGeometry(0.94 * scale, 0.16 * scale), barBorderMat);
+    barBorder.position.z = -0.001;
+    healthBarGroup.add(barBorder);
+
+    const fillWidth = 0.84 * scale;
+    const fillHeight = 0.08 * scale;
+    const fillGeo = new THREE.PlaneGeometry(fillWidth, fillHeight);
+    fillGeo.translate(fillWidth / 2, 0, 0); // Pivot at left edge
+
+    const fillMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, side: THREE.DoubleSide });
+    const healthFill = new THREE.Mesh(fillGeo, fillMat);
+    healthFill.name = 'healthFill';
+    healthFill.position.set(-fillWidth / 2, 0, 0.002);
+    healthBarGroup.add(healthFill);
+
+    group.add(healthBarGroup);
 
     group.position.set(zombie.position[0], zombie.position[1], zombie.position[2]);
     return group;
@@ -935,16 +1001,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         const zIndex = zombiesRef.current.findIndex(z => z.id === hitZombieId);
         if (zIndex !== -1) {
           const z = zombiesRef.current[zIndex];
-          const damage = isHeadshot ? 120 : 50;
+          // Headshots are an instant kill! Body shots deal 50 damage
+          const damage = isHeadshot ? z.maxHealth + 999 : 50;
           z.health -= damage;
           z.hitFlashTime = Date.now();
 
           soundManager.playZombieHit();
-          createExplosionParticles(hitPoint, '#e2e8f0', 15);
+          createExplosionParticles(hitPoint, isHeadshot ? '#ff2200' : '#e2e8f0', isHeadshot ? 30 : 15);
 
           if (z.health <= 0) {
             // Zombie Killed!
-            createExplosionParticles(hitPoint, '#ffffff', 45);
+            createExplosionParticles(hitPoint, isHeadshot ? '#ff0000' : '#ffffff', 45);
             onZombieKill(z.id, isHeadshot);
             finalizeZombieRemoval(z.id);
           }
@@ -1083,13 +1150,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         walkDistanceRef.current += delta * moveSpeed * moveVec.length();
         const headBob = Math.sin(walkDistanceRef.current * 10) * 0.04;
         camera.position.y = 1.6 + headBob;
-
-        // Keep player strictly inside room boundaries
-        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
-        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
       } else {
         camera.position.y = THREE.MathUtils.lerp(camera.position.y, 1.6, 0.1);
       }
+
+      // Prevent player from walking through solid crates/boxes
+      resolveCrateCollisions(camera.position, 0.5);
+
+      // Keep player strictly inside room boundaries
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -13.5, 13.5);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -13.5, 13.5);
 
       // Recoil Recovery
       if (recoilRef.current > 0) {
@@ -1138,6 +1208,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         playerPos.y = 0; // floor projection
         const warnings: DirectionalWarning[] = [];
         const idsToRemove: string[] = [];
+        let minZombieDist = Infinity;
+        let closestDx = 0;
+        let closestDz = 0;
 
         // Update Zombies
         zombiesRef.current.forEach(z => {
@@ -1148,6 +1221,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           const dirToPlayer = new THREE.Vector3().subVectors(playerPos, zPos).normalize();
           const distToPlayer = zPos.distanceTo(playerPos);
 
+          const dx = z.position[0] - camera.position.x;
+          const dz = z.position[2] - camera.position.z;
+
+          if (distToPlayer < minZombieDist) {
+            minZombieDist = distToPlayer;
+            closestDx = dx;
+            closestDz = dz;
+          }
+
           // Rotate Zombie towards player's position
           meshGroup.lookAt(playerPos.x, meshGroup.position.y, playerPos.z);
 
@@ -1155,6 +1237,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           if (distToPlayer > z.radius) {
             z.position[0] += dirToPlayer.x * z.speed * delta;
             z.position[2] += dirToPlayer.z * z.speed * delta;
+
+            // Resolve crate collision for zombies
+            resolveCrateCollisions({ x: z.position[0], z: z.position[2] }, z.radius);
+
             meshGroup.position.set(z.position[0], 0, z.position[2]);
 
             // Walking limb wobble animation
@@ -1181,9 +1267,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             }
           }
 
+          // Billboard and update 3D floating Health Bar
+          const healthBar = meshGroup.getObjectByName('healthBarGroup');
+          if (healthBar && cameraRef.current) {
+            healthBar.quaternion.copy(cameraRef.current.quaternion);
+
+            const healthFill = healthBar.getObjectByName('healthFill') as THREE.Mesh;
+            if (healthFill) {
+              const pct = Math.max(0, Math.min(1, z.health / z.maxHealth));
+              healthFill.scale.x = pct;
+
+              const mat = healthFill.material as THREE.MeshBasicMaterial;
+              if (pct > 0.5) mat.color.setHex(0x00ff66); // Bright green
+              else if (pct > 0.25) mat.color.setHex(0xffbb00); // Yellow/Orange
+              else mat.color.setHex(0xff2200); // Red
+            }
+          }
+
           // Calculate directional warning for HUD radar relative to player position
-          const dx = z.position[0] - camera.position.x;
-          const dz = z.position[2] - camera.position.z;
           const angleToZombie = Math.atan2(dx, -dz); // angle relative to north
           let relAngle = angleToZombie - yawRef.current;
           while (relAngle > Math.PI) relAngle -= Math.PI * 2;
@@ -1197,6 +1298,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
           warnings.push({ direction: dirName, angle: relAngle, distance: distToPlayer });
         });
+
+        // Update Proximity Zombie Buzz audio (volume increases as zombie gets closer)
+        soundManager.updateZombieBuzz(minZombieDist, closestDx, closestDz, yawRef.current);
 
         // Process removals for zombies that attacked
         idsToRemove.forEach(id => finalizeZombieRemoval(id));
@@ -1226,6 +1330,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       // 4. PRACTICE MODE: MOVING TARGETS
       if (mode === 'PRACTICE') {
+        soundManager.updateZombieBuzz(Infinity);
         targetsRef.current.forEach(t => {
           const meshGroup = targetMeshesRef.current.get(t.id);
           if (!meshGroup || t.speed === 0) return;

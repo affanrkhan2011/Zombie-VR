@@ -95,13 +95,14 @@ export default function App() {
     });
   };
 
-  // Zombie Killed (+1 HP per kill)
+  // Zombie Killed (+1 HP per normal kill, +2 HP per headshot kill)
   const handleZombieKill = (zombieId: string, isHeadshot: boolean) => {
     setStats(prev => {
       const newKills = prev.kills + 1;
       const newHeadshots = isHeadshot ? prev.headshots + 1 : prev.headshots;
-      // Gain 1 HP per kill (up to 150 max)
-      const newHp = Math.min(prev.maxHp, prev.hp + 1);
+      // Gain +2 HP for headshots, +1 HP for body kills (up to maxHp)
+      const hpReward = isHeadshot ? 2 : 1;
+      const newHp = Math.min(prev.maxHp, prev.hp + hpReward);
 
       if (newKills > highScore) {
         setHighScore(newKills);
