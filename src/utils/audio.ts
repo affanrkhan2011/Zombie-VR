@@ -254,35 +254,9 @@ class SoundManager {
     });
   }
 
-  // Dark Ambient Horror Drone
+  // Dark Ambient Horror Drone (Disabled buzzing sound)
   public startAmbientDrone() {
-    if (this.ambientOsc1) return; // already playing
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    this.ambientGain = this.ctx.createGain();
-    this.ambientGain.gain.setValueAtTime(this.isMuted ? 0 : 0.12, now);
-
-    this.ambientOsc1 = this.ctx.createOscillator();
-    this.ambientOsc1.type = 'sawtooth';
-    this.ambientOsc1.frequency.setValueAtTime(55, now); // Low A
-
-    this.ambientOsc2 = this.ctx.createOscillator();
-    this.ambientOsc2.type = 'sine';
-    this.ambientOsc2.frequency.setValueAtTime(58.73, now); // Slightly detuned
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(150, now);
-
-    this.ambientOsc1.connect(filter);
-    this.ambientOsc2.connect(filter);
-    filter.connect(this.ambientGain);
-    this.ambientGain.connect(this.ctx.destination);
-
-    this.ambientOsc1.start(now);
-    this.ambientOsc2.start(now);
+    this.stopAmbientDrone();
   }
 
   public stopAmbientDrone() {
@@ -304,6 +278,230 @@ class SoundManager {
       }
       this.ambientOsc2 = null;
     }
+  }
+
+  // --- SPATIAL ZOMBIE SOUND EFFECTS ---
+  public playSpatialZombieGroan(
+    zombiePos: { x: number; y: number; z: number },
+    playerPos: { x: number; y: number; z: number },
+    yaw: number,
+    type: 'WALKER' | 'RUNNER' | 'TANK' | 'STALKER' = 'WALKER'
+  ) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+
+    const now = ctx.currentTime;
+
+    // 1. Calculate relative distance and angle
+    const dx = zombiePos.x - playerPos.x;
+    const dz = zombiePos.z - playerPos.z;
+    const dist = Math.max(0.5, Math.sqrt(dx * dx + dz * dz));
+
+    // Angle relative to player facing direction (yaw)
+    const angleToZombie = Math.atan2(dx, -dz);
+    let relAngle = angleToZombie - yaw;
+    while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+    while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+
+    // Pan calculation: -1 (full left) to +1 (full right)
+    const panVal = Math.sin(relAngle);
+
+    // Volume distance decay (inverse distance law)
+    const rawVol = 1.0 / (1.0 + (dist - 1) * 0.12);
+    const volume = Math.min(0.85, Math.max(0.04, rawVol));
+
+    // Front/Back filter cutoff: muffled if behind player
+    const isBehind = Math.abs(relAngle) > Math.PI / 2;
+    const baseCutoff = isBehind ? 450 : 1600;
+
+    // 2. Build Web Audio Node Chain
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(volume, now);
+
+    const biquadFilter = ctx.createBiquadFilter();
+    biquadFilter.type = 'lowpass';
+    biquadFilter.frequency.setValueAtTime(baseCutoff, now);
+
+    // Stereo Panner or Fallback
+    let pannerNode: AudioNode = masterGain;
+    if (typeof (ctx as any).createStereoPanner === 'function') {
+      const panner = (ctx as any).createStereoPanner();
+      panner.pan.setValueAtTime(panVal, now);
+      pannerNode = panner;
+    }
+
+    biquadFilter.connect(masterGain);
+    if (pannerNode !== masterGain) {
+      masterGain.connect(pannerNode);
+      pannerNode.connect(ctx.destination);
+    } else {
+      masterGain.connect(ctx.destination);
+    }
+
+    // 3. Sound Synthesis based on Zombie Type
+    let duration = 0.9;
+
+    if (type === 'RUNNER') {
+      // High-pitched screech / aggressive hiss
+      duration = 0.6;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.linearRampToValueAtTime(380, now + 0.2);
+      osc.frequency.exponentialRampToValueAtTime(110, now + duration);
+
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(22, now);
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 35;
+      lfo.connect(osc.frequency);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.5, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(gain);
+      gain.connect(biquadFilter);
+
+      lfo.start(now);
+      osc.start(now);
+      lfo.stop(now + duration);
+      osc.stop(now + duration);
+
+    } else if (type === 'TANK') {
+      // Deep guttural sub-bass roar
+      duration = 1.2;
+      const osc1 = ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(45, now);
+      osc1.frequency.linearRampToValueAtTime(75, now + 0.4);
+      osc1.frequency.exponentialRampToValueAtTime(35, now + duration);
+
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'square';
+      osc2.frequency.setValueAtTime(50, now);
+      osc2.frequency.linearRampToValueAtTime(80, now + 0.4);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.7, now + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(biquadFilter);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + duration);
+      osc2.stop(now + duration);
+
+    } else if (type === 'STALKER') {
+      // Sinister clicking / raspy whisper
+      duration = 0.7;
+      const bufferSize = ctx.sampleRate * duration;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (i % 80 < 15 ? 1.8 : 0.2);
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.45, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noise.connect(gain);
+      gain.connect(biquadFilter);
+
+      noise.start(now);
+
+    } else {
+      // WALKER: Classic pitch-modulated zombie groan
+      duration = 0.85;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(85, now);
+      osc.frequency.linearRampToValueAtTime(130, now + 0.3);
+      osc.frequency.exponentialRampToValueAtTime(55, now + duration);
+
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(12, now);
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 18;
+      lfo.connect(osc.frequency);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.5, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(gain);
+      gain.connect(biquadFilter);
+
+      lfo.start(now);
+      osc.start(now);
+      lfo.stop(now + duration);
+      osc.stop(now + duration);
+    }
+  }
+
+  // Spatial Door Opening Hiss / Clank sound when zombie spawns
+  public playDoorSpawnSound(
+    doorPos: { x: number; y: number; z: number },
+    playerPos: { x: number; y: number; z: number },
+    yaw: number
+  ) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+
+    const now = ctx.currentTime;
+    const dx = doorPos.x - playerPos.x;
+    const dz = doorPos.z - playerPos.z;
+    const dist = Math.max(0.5, Math.sqrt(dx * dx + dz * dz));
+
+    const angleToDoor = Math.atan2(dx, -dz);
+    let relAngle = angleToDoor - yaw;
+    while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+    while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+
+    const panVal = Math.sin(relAngle);
+    const volume = Math.min(0.6, Math.max(0.05, 1.0 / (1.0 + (dist - 1) * 0.15)));
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(volume, now);
+
+    if (typeof (ctx as any).createStereoPanner === 'function') {
+      const panner = (ctx as any).createStereoPanner();
+      panner.pan.setValueAtTime(panVal, now);
+      masterGain.connect(panner);
+      panner.connect(ctx.destination);
+    } else {
+      masterGain.connect(ctx.destination);
+    }
+
+    // Metallic door slam + hydraulic hiss
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.6, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+    osc.connect(oscGain);
+    oscGain.connect(masterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.2);
   }
 
   // Heartbeat sound for low HP

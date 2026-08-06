@@ -23,6 +23,18 @@ const computeDeviceQuaternion = (alpha: number, beta: number, gamma: number, ori
   return q;
 };
 
+// 8 Door Locations (2 on each wall) where zombies spawn and enter
+const DOOR_SPAWNS = [
+  { id: 'north_left', x: -7.5, y: 0, z: -14.8, rotY: 0 },
+  { id: 'north_right', x: 7.5, y: 0, z: -14.8, rotY: 0 },
+  { id: 'south_left', x: -7.5, y: 0, z: 14.8, rotY: Math.PI },
+  { id: 'south_right', x: 7.5, y: 0, z: 14.8, rotY: Math.PI },
+  { id: 'west_top', x: -14.8, y: 0, z: -7.5, rotY: Math.PI / 2 },
+  { id: 'west_bottom', x: -14.8, y: 0, z: 7.5, rotY: Math.PI / 2 },
+  { id: 'east_top', x: 14.8, y: 0, z: -7.5, rotY: -Math.PI / 2 },
+  { id: 'east_bottom', x: 14.8, y: 0, z: 7.5, rotY: -Math.PI / 2 },
+];
+
 interface GameCanvasProps {
   mode: GameMode;
   settings: GameSettings;
@@ -104,6 +116,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const spawnedWaveZombiesRef = useRef<number>(0);
   const killedWaveZombiesRef = useRef<number>(0);
   const heartbeatTimerRef = useRef<number>(0);
+  const lastSpatialGroanTimeRef = useRef<number>(0);
 
   // Player Position & Walking Movement
   const walkDistanceRef = useRef<number>(0);
@@ -277,9 +290,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     gunGroup.add(muzzleFlashMesh);
     muzzleFlashMeshRef.current = muzzleFlashMesh;
 
-    // Audio Drone
-    soundManager.startAmbientDrone();
-
     // Resize Handler
     const handleResize = () => {
       if (!mountRef.current || !renderer || !camera) return;
@@ -441,6 +451,65 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wall.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
       wall.receiveShadow = true;
       scene.add(wall);
+    });
+
+    // 8 CONTAINER DOORS (2 on each wall) WHERE ZOMBIES EMERGE
+    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x444450, roughness: 0.5, metalness: 0.7 });
+    const doorInnerMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
+    const doorPanelMat = new THREE.MeshStandardMaterial({ color: 0x2b2b36, roughness: 0.6, metalness: 0.8 });
+    const warningBarMat = new THREE.MeshStandardMaterial({ color: 0xdd8800, roughness: 0.4 });
+
+    DOOR_SPAWNS.forEach(d => {
+      const doorGroup = new THREE.Group();
+      doorGroup.position.set(d.x, d.y, d.z);
+      doorGroup.rotation.y = d.rotY;
+
+      // Dark Inner Recess Aperture
+      const innerRecess = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 0.1), doorInnerMat);
+      innerRecess.position.set(0, 1.9, -0.1);
+      doorGroup.add(innerRecess);
+
+      // Heavy Metal Outer Posts
+      const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.35), doorFrameMat);
+      leftPost.position.set(-1.35, 1.9, 0);
+      doorGroup.add(leftPost);
+
+      const rightPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.35), doorFrameMat);
+      rightPost.position.set(1.35, 1.9, 0);
+      doorGroup.add(rightPost);
+
+      const topHeader = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.35, 0.35), doorFrameMat);
+      topHeader.position.set(0, 3.97, 0);
+      doorGroup.add(topHeader);
+
+      // Parted Steel Sliding Door Panels
+      const leftDoorPanel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.7, 0.12), doorPanelMat);
+      leftDoorPanel.position.set(-0.75, 1.85, -0.02);
+      doorGroup.add(leftDoorPanel);
+
+      const rightDoorPanel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.7, 0.12), doorPanelMat);
+      rightDoorPanel.position.set(0.75, 1.85, -0.02);
+      doorGroup.add(rightDoorPanel);
+
+      // Yellow/Orange Caution Bar Header
+      const hazardBar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 0.05), warningBarMat);
+      hazardBar.position.set(0, 3.65, 0.18);
+      doorGroup.add(hazardBar);
+
+      // Red Hazard Light Fixture above Door
+      const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.2), warningBarMat);
+      fixture.position.set(0, 4.15, 0.18);
+      doorGroup.add(fixture);
+
+      const redLens = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff1100 }));
+      redLens.position.set(0, 4.15, 0.25);
+      doorGroup.add(redLens);
+
+      const redLight = new THREE.PointLight(0xff1100, 1.5, 6);
+      redLight.position.set(0, 4.15, 0.4);
+      doorGroup.add(redLight);
+
+      scene.add(doorGroup);
     });
 
     // Decorative Pillars & Industrial Crates
@@ -728,11 +797,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const spawnZombieInWave = () => {
     if (spawnedWaveZombiesRef.current >= totalWaveZombiesRef.current) return;
 
-    // Pick random spawn angle around 360 degrees
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 13 + Math.random() * 5; // Spawn 13-18m away
-    const x = Math.cos(angle) * distance;
-    const z = Math.sin(angle) * distance;
+    // Pick a random door from the 8 containment doors on the walls
+    const door = DOOR_SPAWNS[Math.floor(Math.random() * DOOR_SPAWNS.length)];
+    const x = door.x;
+    const z = door.z;
 
     // Determine zombie type based on wave
     const rand = Math.random();
@@ -774,6 +842,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     zombiesRef.current.push(zombie);
     spawnedWaveZombiesRef.current++;
+
+    // Play spatial door opening & spawn roar sound
+    if (cameraRef.current) {
+      soundManager.playDoorSpawnSound({ x, y: 0, z }, cameraRef.current.position, yawRef.current);
+      soundManager.playSpatialZombieGroan({ x, y: 1.0, z }, cameraRef.current.position, yawRef.current, type);
+    }
 
     if (sceneRef.current) {
       const mesh = createZombieMesh(zombie);
@@ -1151,6 +1225,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         idsToRemove.forEach(id => finalizeZombieRemoval(id));
 
         onDirectionalUpdate(warnings);
+
+        // Periodic Spatial Zombie Sound Effects (Spatial groans/screeches relative to player position and orientation)
+        if (currentTime - lastSpatialGroanTimeRef.current > 1800 && zombiesRef.current.length > 0) {
+          lastSpatialGroanTimeRef.current = currentTime + Math.floor(Math.random() * 600 - 300);
+          const randomZombie = zombiesRef.current[Math.floor(Math.random() * zombiesRef.current.length)];
+          if (randomZombie) {
+            soundManager.playSpatialZombieGroan(
+              { x: randomZombie.position[0], y: 1.0, z: randomZombie.position[2] },
+              camera.position,
+              yawRef.current,
+              randomZombie.type
+            );
+          }
+        }
 
         // Low HP Heartbeat
         if (hp < 50 && currentTime - heartbeatTimerRef.current > 900) {
