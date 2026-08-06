@@ -8,6 +8,10 @@ class SoundManager {
   private ambientOsc2: OscillatorNode | null = null;
   private heartbeatInterval: number | null = null;
 
+  // Background Music
+  private bgmAudio: HTMLAudioElement | null = null;
+  private bgmListenerAttached: boolean = false;
+
   // Proximity Zombie Buzz Audio Nodes
   private buzzOsc1: OscillatorNode | null = null;
   private buzzOsc2: OscillatorNode | null = null;
@@ -18,10 +22,40 @@ class SoundManager {
   private buzzPanner: AudioNode | null = null;
 
   constructor() {
-    // AudioContext will be initialized on first user click/touch
+    // AudioContext and BGM will be initialized on first user interaction
+    if (typeof window !== 'undefined') {
+      const handleFirstInteraction = () => {
+        this.startBGM();
+        window.removeEventListener('pointerdown', handleFirstInteraction);
+        window.removeEventListener('keydown', handleFirstInteraction);
+      };
+      window.addEventListener('pointerdown', handleFirstInteraction);
+      window.addEventListener('keydown', handleFirstInteraction);
+    }
+  }
+
+  public startBGM() {
+    if (!this.bgmAudio) {
+      this.bgmAudio = new Audio('/Audio/The_Nursery_Door.mp3');
+      this.bgmAudio.loop = true;
+    }
+    this.bgmAudio.volume = this.isMuted ? 0 : 0.35;
+
+    if (this.bgmAudio.paused) {
+      this.bgmAudio.play().catch(err => {
+        console.log('BGM waiting for user interaction:', err);
+      });
+    }
+  }
+
+  public stopBGM() {
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+    }
   }
 
   private initCtx() {
+    this.startBGM();
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
@@ -37,6 +71,9 @@ class SoundManager {
     this.isMuted = muted;
     if (this.ambientGain) {
       this.ambientGain.gain.value = muted ? 0 : 0.15;
+    }
+    if (this.bgmAudio) {
+      this.bgmAudio.volume = muted ? 0 : 0.35;
     }
   }
 

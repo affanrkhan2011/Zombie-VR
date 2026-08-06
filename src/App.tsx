@@ -3,6 +3,7 @@ import { GameMode, PlayerStats, GameSettings, DirectionalWarning } from './types
 import { HomeScreen } from './components/HomeScreen';
 import { GameCanvas } from './components/GameCanvas';
 import { GameHUD } from './components/GameHUD';
+import { soundManager } from './utils/audio';
 
 export default function App() {
   const [mode, setMode] = useState<GameMode>('HOME');
@@ -45,6 +46,13 @@ export default function App() {
   const [maxWave, setMaxWave] = useState<number>(() => {
     return parseInt(localStorage.getItem('zombie_max_wave') || '1', 10);
   });
+
+  useEffect(() => {
+    soundManager.setMuted(!settings.soundEnabled);
+    if (settings.soundEnabled) {
+      soundManager.startBGM();
+    }
+  }, [settings.soundEnabled]);
 
   const requestGyroPermission = async () => {
     try {
