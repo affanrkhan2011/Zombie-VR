@@ -66,7 +66,7 @@ export interface GameSettings {
   sensitivity: number; // 0.5 to 3.0
   flashlightOn: boolean;
   vrStereoMode: boolean;
-  laserColor: string; // '#ff0000' or '#00ff88'
+  laserColor: string; // '#CC5200' or '#00ff88'
 }
 
 export interface DirectionalWarning {

@@ -30,7 +30,7 @@ export default function App() {
     sensitivity: 1.2,
     flashlightOn: true,
     vrStereoMode: false,
-    laserColor: '#ff0033',
+    laserColor: '#CC5200',
   });
 
   const [isPaused, setIsPaused] = useState<boolean>(false);

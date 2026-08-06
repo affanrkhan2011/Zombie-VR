@@ -45,14 +45,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     <div id="game-hud-overlay" className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 select-none z-10">
       {/* Blood Damage Screen Flash */}
       {isDamaged && (
-        <div id="damage-vignette" className="absolute inset-0 bg-red-600/35 border-8 border-red-600/80 pointer-events-none animate-pulse transition-all duration-200"></div>
+        <div id="damage-vignette" className="absolute inset-0 bg-\[#CC5200\]/35 border-8 border-\[#CC5200\]/80 pointer-events-none animate-pulse transition-all duration-200"></div>
       )}
 
       {/* WAVE BONUS ANNOUNCEMENT */}
       {waveBonusMessage && (
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20 font-mono text-center">
           <div className="text-2xl text-white uppercase mb-2">WAVE CLEARED</div>
-          <div className="text-sm text-[#ff3300] uppercase tracking-widest">{waveBonusMessage}</div>
+          <div className="text-sm text-[#CC5200] uppercase tracking-widest">{waveBonusMessage}</div>
         </div>
       )}
 
@@ -73,8 +73,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           )}
 
           {stats.ammo === 0 && stats.reloadTimeInZone === 0 && (
-            <div className="bg-red-950/90 border border-red-500/80 px-4 py-2 rounded-md shadow-[0_0_20px_rgba(239,68,68,0.4)] backdrop-blur-sm animate-bounce">
-              <div className="text-red-400 font-extrabold text-sm tracking-wider uppercase">⚠️ OUT OF AMMO</div>
+            <div className="bg-\[#4d1f00\]/90 border border-\[#CC5200\]/80 px-4 py-2 rounded-md shadow-[0_0_20px_rgba(204,82,0,0.4)] backdrop-blur-sm animate-bounce">
+              <div className="text-\[#CC5200\] font-extrabold text-sm tracking-wider uppercase">⚠️ OUT OF AMMO</div>
               <div className="text-[11px] text-zinc-300 mt-0.5">HEAD TO GREEN RELOAD ZONE (BOTTOM-RIGHT)</div>
             </div>
           )}
@@ -85,7 +85,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {mode === 'PLAY' && !isPaused && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20 font-mono">
           {behindThreat && (
-            <div className="text-[#ff3300] text-sm uppercase tracking-[0.2em] animate-pulse">
+            <div className="text-[#CC5200] text-sm uppercase tracking-[0.2em] animate-pulse">
               [ BEHIND YOU ]
             </div>
           )}
@@ -109,14 +109,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {/* HP Bar */}
           <div className="flex flex-col">
             <div className="flex justify-between items-end mb-1">
-              <span className="text-[#ff3300] uppercase text-xs">HP</span>
-              <span className={`text-xl leading-none ${stats.hp <= 30 ? 'text-[#ff3300] animate-pulse' : 'text-white'}`}>
+              <span className="text-[#CC5200] uppercase text-xs">HP</span>
+              <span className={`text-xl leading-none ${stats.hp <= 30 ? 'text-[#CC5200] animate-pulse' : 'text-white'}`}>
                 {stats.hp}
               </span>
             </div>
             <div className="w-full bg-zinc-900 h-1">
               <div
-                className={`h-full transition-all duration-300 ${stats.hp <= 30 ? 'bg-[#ff3300]' : 'bg-white'}`}
+                className={`h-full transition-all duration-300 ${stats.hp <= 30 ? 'bg-[#CC5200]' : 'bg-white'}`}
                 style={{ width: `${hpPercent}%` }}
               ></div>
             </div>
@@ -126,13 +126,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           <div className="flex flex-col">
             <div className="flex justify-between items-end mb-0.5">
               <span className="text-emerald-400 uppercase text-[10px]">AMMO</span>
-              <span className={`text-base font-bold leading-none ${stats.ammo === 0 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>
+              <span className={`text-base font-bold leading-none ${stats.ammo === 0 ? 'text-\[#CC5200\] animate-pulse' : 'text-emerald-400'}`}>
                 {stats.ammo} / {stats.maxAmmo}
               </span>
             </div>
             <div className="w-full bg-zinc-900 h-1 overflow-hidden rounded-full">
               <div
-                className={`h-full transition-all duration-150 ${stats.ammo === 0 ? 'bg-red-500' : 'bg-emerald-400'}`}
+                className={`h-full transition-all duration-150 ${stats.ammo === 0 ? 'bg-\[#CC5200\]' : 'bg-emerald-400'}`}
                 style={{ width: `${(stats.ammo / stats.maxAmmo) * 100}%` }}
               ></div>
             </div>
@@ -148,7 +148,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </div>
             <div className="flex flex-col">
               <span className="text-gray-500">Kills</span>
-              <span className="text-[#ff3300] text-xl leading-none">{stats.kills}</span>
+              <span className="text-[#CC5200] text-xl leading-none">{stats.kills}</span>
             </div>
           </div>
         ) : (
@@ -225,14 +225,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                   step="0.1"
                   value={settings.sensitivity}
                   onChange={e => onUpdateSettings({ sensitivity: parseFloat(e.target.value) })}
-                  className="w-full accent-[#ff3300]"
+                  className="w-full accent-[#CC5200]"
                 />
               </div>
               <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                 <span className="text-sm text-gray-300">Mobile Gyro Look</span>
                 <button
                   onClick={() => onUpdateSettings({ gyroEnabled: !settings.gyroEnabled })}
-                  className={`text-sm uppercase ${settings.gyroEnabled ? 'text-[#ff3300]' : 'text-gray-600'}`}
+                  className={`text-sm uppercase ${settings.gyroEnabled ? 'text-[#CC5200]' : 'text-gray-600'}`}
                 >
                   {settings.gyroEnabled ? 'ON' : 'OFF'}
                 </button>
@@ -254,7 +254,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {stats.hp <= 0 && mode === 'PLAY' && (
         <div id="gameover-modal" className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-50 pointer-events-auto font-mono">
           <div className="max-w-md w-full text-center">
-            <h1 className="text-6xl font-display text-[#ff3300] uppercase mb-8 leading-none">
+            <h1 className="text-6xl font-display text-[#CC5200] uppercase mb-8 leading-none">
               DEAD
             </h1>
             <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-10 text-left border-y border-zinc-800 py-6">
@@ -264,7 +264,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </div>
               <div>
                 <div className="text-xs text-gray-500 uppercase">Kills</div>
-                <div className="text-2xl text-[#ff3300] mt-1">{stats.kills}</div>
+                <div className="text-2xl text-[#CC5200] mt-1">{stats.kills}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 uppercase">Headshots</div>
@@ -278,7 +278,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </div>
             </div>
             <div className="flex flex-col gap-4">
-              <button onClick={onRestartGame} className="w-full py-4 bg-[#ff3300] text-black font-display text-2xl uppercase hover:bg-white transition-colors">
+              <button onClick={onRestartGame} className="w-full py-4 bg-[#CC5200] text-black font-display text-2xl uppercase hover:bg-white transition-colors">
                 RETRY
               </button>
               <button onClick={onExitHome} className="w-full py-4 text-gray-500 font-display text-xl uppercase hover:text-white transition-colors">

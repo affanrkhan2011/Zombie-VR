@@ -74,7 +74,7 @@ const isInGreenZone = (px: number, pz: number) => {
 };
 
 // Helper function to resolve player/zombie collisions against solid interior walls
-const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
+const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5, isZombie: boolean = false) => {
   MAP_WALLS.forEach(w => {
     let px = pos.x - w.x;
     let pz = pos.z - w.z;
@@ -127,6 +127,20 @@ const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.
       pos.z += pushZ;
     }
   });
+
+  if (isZombie) {
+    const dx = pos.x - GREEN_ZONE_CENTER.x;
+    const dz = pos.z - GREEN_ZONE_CENTER.z;
+    const distSq = dx * dx + dz * dz;
+    const minZoneDist = GREEN_ZONE_RADIUS + radius;
+    if (distSq < minZoneDist * minZoneDist && distSq > 0.0001) {
+      const dist = Math.sqrt(distSq);
+      const pushX = (dx / dist) * minZoneDist;
+      const pushZ = (dz / dist) * minZoneDist;
+      pos.x = GREEN_ZONE_CENTER.x + pushX;
+      pos.z = GREEN_ZONE_CENTER.z + pushZ;
+    }
+  }
 };
 
 interface GameCanvasProps {
@@ -365,7 +379,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Laser Beam
     const laserMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(settings.laserColor || '#ff0033'),
+      color: new THREE.Color(settings.laserColor || '#CC5200'),
       transparent: true,
       opacity: 0.85,
     });
@@ -410,7 +424,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Update Laser Color
   useEffect(() => {
     if (laserMeshRef.current) {
-      const col = new THREE.Color(settings.laserColor || '#ff0033');
+      const col = new THREE.Color(settings.laserColor || '#CC5200');
       (laserMeshRef.current.material as THREE.MeshBasicMaterial).color = col;
     }
     soundManager.setMuted(!settings.soundEnabled);
@@ -604,19 +618,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // RED ZOMBIE SPAWN MARKERS - Glowing Red Shapes & Light Pillars
     RED_ZOMBIE_SPAWNS.forEach(sp => {
-      const redCircleMat = new THREE.MeshBasicMaterial({ color: 0xff0044, side: THREE.DoubleSide });
+      const redCircleMat = new THREE.MeshBasicMaterial({ color: 0xCC5200, side: THREE.DoubleSide });
       const redCircle = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.65, 24), redCircleMat);
       redCircle.rotation.x = -Math.PI / 2;
       redCircle.position.set(sp.x, 0.02, sp.z);
       scene.add(redCircle);
 
       const redPillarGeo = new THREE.CylinderGeometry(0.6, 0.6, 3.5, 16, 1, true);
-      const redPillarMat = new THREE.MeshBasicMaterial({ color: 0xff0044, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+      const redPillarMat = new THREE.MeshBasicMaterial({ color: 0xCC5200, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
       const redPillar = new THREE.Mesh(redPillarGeo, redPillarMat);
       redPillar.position.set(sp.x, 1.75, sp.z);
       scene.add(redPillar);
 
-      const redLight = new THREE.PointLight(0xff0044, 2.5, 5);
+      const redLight = new THREE.PointLight(0xCC5200, 2.5, 5);
       redLight.position.set(sp.x, 0.8, sp.z);
       scene.add(redLight);
     });
@@ -652,7 +666,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     const metalMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.8 });
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 });
-    const redMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+    const redMat = new THREE.MeshBasicMaterial({ color: 0xCC5200 });
 
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.55), metalMat);
     gun.add(barrel);
@@ -687,7 +701,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     let bodyColor = 0xff6600; // Vibrant Orange for WALKER
     let clothesColor = 0xcc5200;
-    let eyeColor = 0xff0000;
+    let eyeColor = 0xCC5200;
     let scale = 1.0;
 
     if (zombie.type === 'BOSS') {
@@ -962,7 +976,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       attackCooldown: 0,
       isAttacking: false,
       hitFlashTime: 0,
-      glowColor: type === 'BOSS' ? '#aa00ff' : type === 'RUNNER' ? '#ff3300' : '#00ff66',
+      glowColor: type === 'BOSS' ? '#aa00ff' : type === 'RUNNER' ? '#CC5200' : '#00ff66',
     };
 
     zombiesRef.current.push(zombie);
@@ -1114,13 +1128,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             z.hitFlashTime = Date.now();
 
             soundManager.playZombieHit();
-            createExplosionParticles(hitPoint, isHeadshot ? '#ff2200' : '#e2e8f0', isHeadshot ? 30 : 15);
+            createExplosionParticles(hitPoint, isHeadshot ? '#CC5200' : '#e2e8f0', isHeadshot ? 30 : 15);
 
             if (z.health <= 0) {
               z.health = 0;
               z.isDead = true;
 
-              createExplosionParticles(hitPoint, z.type === 'BOSS' ? '#aa00ff' : isHeadshot ? '#ff0000' : '#ffffff', 50);
+              createExplosionParticles(hitPoint, z.type === 'BOSS' ? '#aa00ff' : isHeadshot ? '#CC5200' : '#ffffff', 50);
               onZombieKill(z.id, isHeadshot);
               finalizeZombieRemoval(z.id);
             }
@@ -1361,7 +1375,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             z.position[0] += dirToPlayer.x * z.speed * delta;
             z.position[2] += dirToPlayer.z * z.speed * delta;
 
-            resolveMapCollisions({ x: z.position[0], z: z.position[2] }, z.radius);
+            const tempPos = { x: z.position[0], z: z.position[2] };
+            resolveMapCollisions(tempPos, z.radius, true);
+            z.position[0] = tempPos.x;
+            z.position[2] = tempPos.z;
 
             meshGroup.position.set(z.position[0], 0, z.position[2]);
 
@@ -1512,8 +1529,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     >
       {/* Click To Fire Crosshair Overlay */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-red-500/60 rounded-full flex items-center justify-center animate-pulse">
-          <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+        <div className="w-6 h-6 border-2 border-\[#CC5200\]/60 rounded-full flex items-center justify-center animate-pulse">
+          <div className="w-1.5 h-1.5 bg-\[#CC5200\] rounded-full"></div>
         </div>
       </div>
 
@@ -1526,14 +1543,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           onPointerUp={handleJoystickPointerUp}
           onPointerCancel={handleJoystickPointerUp}
         >
-          <div className={`relative w-28 h-28 rounded-full border-2 ${isJoystickActive ? 'border-[#ff3300] bg-black/80 shadow-[0_0_20px_rgba(255,51,0,0.4)]' : 'border-white/40 bg-black/60'} backdrop-blur-md flex items-center justify-center shadow-2xl transition-colors`}>
+          <div className={`relative w-28 h-28 rounded-full border-2 ${isJoystickActive ? 'border-[#CC5200] bg-black/80 shadow-[0_0_20px_rgba(204,82,0,0.4)]' : 'border-white/40 bg-black/60'} backdrop-blur-md flex items-center justify-center shadow-2xl transition-colors`}>
             <div className="absolute top-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▲</div>
             <div className="absolute bottom-1.5 text-[9px] text-white/50 font-mono pointer-events-none">▼</div>
             <div className="absolute left-1.5 text-[9px] text-white/50 font-mono pointer-events-none">◄</div>
             <div className="absolute right-1.5 text-[9px] text-white/50 font-mono pointer-events-none">►</div>
 
             <div
-              className={`w-12 h-12 rounded-full ${isJoystickActive ? 'bg-[#ff3300] shadow-[0_0_15px_#ff3300]' : 'bg-white/90'} border-2 border-white transition-transform duration-75 ease-out flex items-center justify-center pointer-events-none`}
+              className={`w-12 h-12 rounded-full ${isJoystickActive ? 'bg-[#CC5200] shadow-[0_0_15px_#CC5200]' : 'bg-white/90'} border-2 border-white transition-transform duration-75 ease-out flex items-center justify-center pointer-events-none`}
               style={{
                 transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)`,
               }}
