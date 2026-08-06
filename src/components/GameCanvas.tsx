@@ -109,31 +109,36 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const walkDistanceRef = useRef<number>(0);
   const lastStepTimeRef = useRef<number>(0);
   const motionSpeedRef = useRef<number>(0);
+  const lastHeadingRef = useRef<number | null>(null);
+  const lastHeadingTimeRef = useRef<number>(0);
+  const lastRotationTimeRef = useRef<number>(0);
   const keysPressedRef = useRef<{ [key: string]: boolean }>({});
 
-  // Motion-based Phone Movement Detection via Accelerometer
+  // Motion-based Phone Step Detection via Accelerometer (Filters out turning)
   useEffect(() => {
     const handleMotion = (e: DeviceMotionEvent) => {
-      // Prefer pure acceleration if available, otherwise delta from gravity
-      let mag = 0;
-      if (e.acceleration && e.acceleration.x !== null) {
-        const ax = e.acceleration.x || 0;
-        const ay = e.acceleration.y || 0;
-        const az = e.acceleration.z || 0;
-        mag = Math.sqrt(ax * ax + ay * ay + az * az);
-      } else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.x !== null) {
-        const gx = e.accelerationIncludingGravity.x || 0;
+      const now = performance.now();
+      // Ignore motion if the phone was turned/rotated recently (within last 380ms)
+      if (now - lastRotationTimeRef.current < 380) return;
+
+      // Extract vertical step impact (Y axis / Z axis vertical bounce when walking)
+      let vertAcc = 0;
+      if (e.acceleration && e.acceleration.y !== null) {
+        const ay = Math.abs(e.acceleration.y || 0);
+        const az = Math.abs(e.acceleration.z || 0);
+        vertAcc = Math.max(ay, az);
+      } else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.y !== null) {
         const gy = e.accelerationIncludingGravity.y || 0;
         const gz = e.accelerationIncludingGravity.z || 0;
-        const totalG = Math.sqrt(gx * gx + gy * gy + gz * gz);
-        mag = Math.abs(totalG - 9.8);
+        const totalAcc = Math.sqrt(gy * gy + gz * gz);
+        vertAcc = Math.abs(totalAcc - 9.8);
       }
 
-      // If physical phone movement / stepping is detected (threshold ~1.2 m/s²)
-      if (mag > 1.2) {
-        lastStepTimeRef.current = performance.now();
-        // Scale motion speed based on movement vigor (between 0.5x and 1.5x)
-        motionSpeedRef.current = Math.min(1.5, Math.max(0.6, mag / 2.5));
+      // High threshold (~2.8 m/s²) to require a distinct physical step or jog in place
+      // Enforce step cadence: minimum 300ms between physical steps
+      if (vertAcc > 2.8 && (now - lastStepTimeRef.current > 300)) {
+        lastStepTimeRef.current = now;
+        motionSpeedRef.current = Math.min(1.2, Math.max(0.8, vertAcc / 3.2));
       }
     };
 
@@ -330,6 +335,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       // Get forward vector (0, 0, -1) rotated by qRaw to extract current heading
       const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(qRaw);
       const heading = Math.atan2(forwardVec.x, -forwardVec.z);
+
+      const now = performance.now();
+      if (lastHeadingRef.current !== null && lastHeadingTimeRef.current > 0) {
+        const dt = (now - lastHeadingTimeRef.current) / 1000;
+        if (dt > 0.005) {
+          let hDiff = Math.abs(heading - lastHeadingRef.current);
+          if (hDiff > Math.PI) hDiff = Math.PI * 2 - hDiff;
+          const angVel = hDiff / dt;
+          if (angVel > 0.35) {
+            // Turning phone detected -> mark rotation timestamp to suppress walking step triggers
+            lastRotationTimeRef.current = now;
+          }
+        }
+      }
+      lastHeadingRef.current = heading;
+      lastHeadingTimeRef.current = now;
 
       if (initialYawOffsetRef.current === null) {
         initialYawOffsetRef.current = heading;
@@ -936,6 +957,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (hasGyroSensorRef.current && settings.gyroEnabled) return;
 
     if (e.buttons === 1 || e.pointerType === 'mouse') {
+      if (Math.abs(e.movementX) > 1.5 || Math.abs(e.movementY) > 1.5) {
+        lastRotationTimeRef.current = performance.now();
+      }
       const sens = (settings.sensitivity || 1.2) * 0.003;
       yawRef.current -= e.movementX * sens;
       pitchRef.current -= e.movementY * sens;
@@ -981,14 +1005,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       // 1.5 PLAYER WALKING MOVEMENT (Automatic Phone Motion Sensor + WASD Fallback)
       const now = performance.now();
-      const isMotionActive = (now - lastStepTimeRef.current < 550);
+      // Discrete step duration: 220ms window per physical step (~0.45m step distance)
+      const isStepActive = (now - lastStepTimeRef.current < 220);
       const moveFwdKey = keysPressedRef.current['w'] || keysPressedRef.current['arrowup'];
       const moveBackKey = keysPressedRef.current['s'] || keysPressedRef.current['arrowdown'];
       const moveLeftKey = keysPressedRef.current['a'] || keysPressedRef.current['arrowleft'];
       const moveRightKey = keysPressedRef.current['d'] || keysPressedRef.current['arrowright'];
 
       let fwdInput = 0;
-      if (moveFwdKey || isMotionActive) fwdInput += 1;
+      if (moveFwdKey || isStepActive) fwdInput += 1;
       if (moveBackKey) fwdInput -= 1;
 
       let strafeInput = 0;
@@ -996,9 +1021,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (moveLeftKey) strafeInput -= 1;
 
       if (fwdInput !== 0 || strafeInput !== 0) {
-        // Base movement speed scaled by phone motion intensity when active
-        const baseSpeed = 3.8;
-        const currentSpeed = isMotionActive ? baseSpeed * (motionSpeedRef.current || 1.0) : baseSpeed;
+        // Calibrated step speed: 2.2 m/s during step impulse (~0.48m per step); keyboard = 3.5 m/s
+        const currentSpeed = isStepActive && !moveFwdKey ? 2.2 * (motionSpeedRef.current || 1.0) : 3.5;
 
         const forwardDir = new THREE.Vector3();
         camera.getWorldDirection(forwardDir);
