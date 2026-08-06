@@ -23,18 +23,6 @@ const computeDeviceQuaternion = (alpha: number, beta: number, gamma: number, ori
   return q;
 };
 
-// 8 Door Locations on outer walls where zombies emerge
-const DOOR_SPAWNS = [
-  { id: 'north_left', x: -7.5, y: 0, z: -14.8, rotY: 0 },
-  { id: 'north_right', x: 7.5, y: 0, z: -14.8, rotY: 0 },
-  { id: 'south_left', x: -7.5, y: 0, z: 14.8, rotY: Math.PI },
-  { id: 'south_right', x: 7.5, y: 0, z: 14.8, rotY: Math.PI },
-  { id: 'west_top', x: -14.8, y: 0, z: -7.5, rotY: Math.PI / 2 },
-  { id: 'west_bottom', x: -14.8, y: 0, z: 7.5, rotY: Math.PI / 2 },
-  { id: 'east_top', x: 14.8, y: 0, z: -7.5, rotY: -Math.PI / 2 },
-  { id: 'east_bottom', x: 14.8, y: 0, z: 7.5, rotY: -Math.PI / 2 },
-];
-
 // RED ZOMBIE SPAWN POINTS (from map diagram)
 const RED_ZOMBIE_SPAWNS = [
   { x: -12, z: -10 }, // Top-Left
@@ -75,17 +63,7 @@ const MAP_WALLS = [
   { x: 8.5, z: 8.5, width: 0.5, depth: 7, rotY: -Math.PI / 4 }, // Slanted wall
 ];
 
-// Solid Obstacle Crates / Boxes in the arena
-const CRATE_BOXES = [
-  { x: -10, z: -10, width: 2, depth: 2 },
-  { x: 11, z: -8, width: 2, depth: 2 },
-  { x: -9, z: 11, width: 2, depth: 2 },
-  { x: -12, z: 2, width: 2, depth: 2 },
-  { x: 3, z: -12, width: 2, depth: 2 },
-  { x: -4, z: 12, width: 2, depth: 2 },
-];
-
-// Helper function to resolve player/zombie collisions against solid interior walls & crates
+// Helper function to resolve player/zombie collisions against solid interior walls
 const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5) => {
   MAP_WALLS.forEach(w => {
     let px = pos.x - w.x;
@@ -137,33 +115,6 @@ const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.
 
       pos.x += pushX;
       pos.z += pushZ;
-    }
-  });
-
-  CRATE_BOXES.forEach(c => {
-    const halfW = c.width / 2;
-    const halfD = c.depth / 2;
-    const minX = c.x - halfW;
-    const maxX = c.x + halfW;
-    const minZ = c.z - halfD;
-    const maxZ = c.z + halfD;
-
-    const closestX = THREE.MathUtils.clamp(pos.x, minX, maxX);
-    const closestZ = THREE.MathUtils.clamp(pos.z, minZ, maxZ);
-
-    const dx = pos.x - closestX;
-    const dz = pos.z - closestZ;
-    const distSq = dx * dx + dz * dz;
-
-    if (distSq < radius * radius) {
-      const dist = Math.sqrt(distSq);
-      if (dist > 0.0001) {
-        const overlap = radius - dist;
-        pos.x += (dx / dist) * overlap;
-        pos.z += (dz / dist) * overlap;
-      } else {
-        pos.x += radius;
-      }
     }
   });
 };
@@ -220,7 +171,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     floor: THREE.MeshStandardMaterial;
     ceiling: THREE.MeshStandardMaterial;
     wall: THREE.MeshStandardMaterial;
-    crate: THREE.MeshStandardMaterial;
   } | null>(null);
 
   const lightsRef = useRef<{
@@ -644,64 +594,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     orangeLight.position.set(ORANGE_BOSS_SPAWN.x, 1.0, ORANGE_BOSS_SPAWN.z);
     scene.add(orangeLight);
 
-    // CONTAINER DOORS ON WALLS
-    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x444450, roughness: 0.5, metalness: 0.7 });
-    const doorInnerMat = new THREE.MeshBasicMaterial({ color: 0x050508 });
-    const doorPanelMat = new THREE.MeshStandardMaterial({ color: 0x2b2b36, roughness: 0.6, metalness: 0.8 });
-    const warningBarMat = new THREE.MeshStandardMaterial({ color: 0xdd8800, roughness: 0.4 });
-
-    DOOR_SPAWNS.forEach(d => {
-      const doorGroup = new THREE.Group();
-      doorGroup.position.set(d.x, d.y, d.z);
-      doorGroup.rotation.y = d.rotY;
-
-      const innerRecess = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.8, 0.1), doorInnerMat);
-      innerRecess.position.set(0, 1.9, -0.1);
-      doorGroup.add(innerRecess);
-
-      const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.35), doorFrameMat);
-      leftPost.position.set(-1.35, 1.9, 0);
-      doorGroup.add(leftPost);
-
-      const rightPost = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.8, 0.35), doorFrameMat);
-      rightPost.position.set(1.35, 1.9, 0);
-      doorGroup.add(rightPost);
-
-      const topHeader = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.35, 0.35), doorFrameMat);
-      topHeader.position.set(0, 3.97, 0);
-      doorGroup.add(topHeader);
-
-      const leftDoorPanel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.7, 0.12), doorPanelMat);
-      leftDoorPanel.position.set(-0.75, 1.85, -0.02);
-      doorGroup.add(leftDoorPanel);
-
-      const rightDoorPanel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.7, 0.12), doorPanelMat);
-      rightDoorPanel.position.set(0.75, 1.85, -0.02);
-      doorGroup.add(rightDoorPanel);
-
-      const hazardBar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 0.05), warningBarMat);
-      hazardBar.position.set(0, 3.65, 0.18);
-      doorGroup.add(hazardBar);
-
-      scene.add(doorGroup);
-    });
-
-    // Crates
-    const crateMat = new THREE.MeshStandardMaterial({ color: 0x3d352e, roughness: 0.8 });
     envMaterialsRef.current = {
       floor: floorMat,
       ceiling: ceilingMat,
       wall: wallMat,
-      crate: crateMat
     };
-
-    CRATE_BOXES.forEach(c => {
-      const crate = new THREE.Mesh(new THREE.BoxGeometry(c.width, 2, c.depth), crateMat);
-      crate.position.set(c.x, 1, c.z);
-      crate.castShadow = true;
-      crate.receiveShadow = true;
-      scene.add(crate);
-    });
   };
 
   // --- GUN MODEL GENERATOR ---
