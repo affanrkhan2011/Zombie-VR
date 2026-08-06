@@ -62,20 +62,23 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* DANGER / SPATIAL WARNING TEXT */}
       {mode === 'PLAY' && !isPaused && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20">
           {behindThreat && (
-            <div id="warning-behind" className="bg-red-600 text-white font-black text-xs md:text-sm px-4 py-1 rounded-full uppercase tracking-widest shadow-lg animate-ping border border-red-300">
-              ⚠️ ENEMY BEHIND YOU! TURN AROUND!
+            <div id="warning-behind" className="bg-red-600 text-white font-black text-xs sm:text-sm px-4 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.6)] border border-red-400 flex items-center gap-2 animate-pulse">
+              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white"></div>
+              BEHIND YOU
             </div>
           )}
           {leftThreat && !behindThreat && (
-            <div id="warning-left" className="bg-amber-600 text-white font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow-lg animate-pulse">
-              ⬅️ THREAT APPROACHING FROM LEFT
+            <div id="warning-left" className="bg-red-900/90 text-red-200 font-bold text-[10px] sm:text-xs px-3 py-1 rounded-full uppercase shadow-lg border border-red-700/50 flex items-center gap-2">
+              <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[7px] border-r-red-400"></div>
+              LEFT THREAT
             </div>
           )}
           {rightThreat && !behindThreat && (
-            <div id="warning-right" className="bg-amber-600 text-white font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider shadow-lg animate-pulse">
-              THREAT APPROACHING FROM RIGHT ➡️
+            <div id="warning-right" className="bg-red-900/90 text-red-200 font-bold text-[10px] sm:text-xs px-3 py-1 rounded-full uppercase shadow-lg border border-red-700/50 flex items-center gap-2">
+              RIGHT THREAT
+              <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[7px] border-l-red-400"></div>
             </div>
           )}
         </div>

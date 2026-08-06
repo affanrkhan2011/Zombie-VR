@@ -361,8 +361,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const createGunModel = (): THREE.Group => {
     const gun = new THREE.Group();
 
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.3, metalness: 0.9 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x222228, roughness: 0.6 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x88888c, roughness: 0.3, metalness: 0.8 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x55555a, roughness: 0.5 });
     const redMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
 
     // Barrel
@@ -656,15 +656,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (!scene) return;
 
     for (let i = 0; i < count; i++) {
-      const pGeo = new THREE.BufferGeometry();
+      const isWhite = color === '#ffffff';
+      const size = isWhite ? 0.15 + Math.random() * 0.1 : 0.05;
       const pMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color) });
-      const pMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), pMat);
+      const pMesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), pMat);
 
       pMesh.position.copy(pos);
       const vel = new THREE.Vector3(
-        (Math.random() - 0.5) * 4,
-        (Math.random() - 0.2) * 4,
-        (Math.random() - 0.5) * 4
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.2) * 6,
+        (Math.random() - 0.5) * 6
       );
 
       scene.add(pMesh);
@@ -672,7 +673,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         mesh: pMesh,
         vel,
         life: 0,
-        maxLife: 0.4 + Math.random() * 0.3,
+        maxLife: isWhite ? 1.0 + Math.random() * 1.5 : 0.4 + Math.random() * 0.3,
       });
     }
   };
@@ -753,11 +754,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           z.hitFlashTime = Date.now();
 
           soundManager.playZombieHit();
-          createExplosionParticles(hitPoint, '#aa0011', 18);
+          createExplosionParticles(hitPoint, '#e2e8f0', 15);
 
           if (z.health <= 0) {
             // Zombie Killed!
-            createExplosionParticles(hitPoint, '#ff1100', 35);
+            createExplosionParticles(hitPoint, '#ffffff', 45);
             onZombieKill(z.id, isHeadshot);
             finalizeZombieRemoval(z.id);
           }
@@ -945,7 +946,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               onPlayerHit(z.damage); // take damage
               
               // Zombie disappears after attacking
-              createExplosionParticles(meshGroup.position, '#550000', 20); // optional: dark blood explosion
+              createExplosionParticles(meshGroup.position, '#ffffff', 25); // white blocks remains
               idsToRemove.push(z.id);
             }
           }
