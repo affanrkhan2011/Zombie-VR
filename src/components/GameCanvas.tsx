@@ -3,12 +3,33 @@ import * as THREE from 'three';
 import { GameMode, Zombie, ZombieType, Target, GameSettings, DirectionalWarning } from '../types';
 import { soundManager } from '../utils/audio';
 
+// --- THREE.JS DEVICE ORIENTATION MATHEMATICS ---
+const zee = new THREE.Vector3(0, 0, 1);
+const tempEuler = new THREE.Euler();
+const q0 = new THREE.Quaternion();
+const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90 deg X rotation
+
+const computeDeviceQuaternion = (alpha: number, beta: number, gamma: number, orient: number): THREE.Quaternion => {
+  const alphaRad = alpha ? THREE.MathUtils.degToRad(alpha) : 0;
+  const betaRad = beta ? THREE.MathUtils.degToRad(beta) : 0;
+  const gammaRad = gamma ? THREE.MathUtils.degToRad(gamma) : 0;
+  const orientRad = orient ? THREE.MathUtils.degToRad(orient) : 0;
+
+  tempEuler.set(betaRad, alphaRad, -gammaRad, 'YXZ');
+  const q = new THREE.Quaternion();
+  q.setFromEuler(tempEuler);
+  q.multiply(q1); // Orient camera looking down -Z axis
+  q.multiply(q0.setFromAxisAngle(zee, -orientRad)); // Screen orientation compensation
+  return q;
+};
+
 interface GameCanvasProps {
   mode: GameMode;
   settings: GameSettings;
   isPaused: boolean;
   wave: number;
   hp: number;
+  recenterSignal?: number;
   onPlayerHit: (damage: number) => void;
   onZombieKill: (zombieId: string, isHeadshot: boolean) => void;
   onTargetHit: (targetId: string, isBullseye: boolean) => void;
@@ -23,6 +44,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   isPaused,
   wave,
   hp,
+  recenterSignal = 0,
   onPlayerHit,
   onZombieKill,
   onTargetHit,
@@ -55,9 +77,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Camera rotation & Gyro state
   const yawRef = useRef<number>(0);
   const pitchRef = useRef<number>(0);
-  const isDraggingRef = useRef<boolean>(false);
-  const lastTouchRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const recoilRef = useRef<number>(0);
+
+  // Device orientation / Gyro refs
+  const deviceQuatRef = useRef<THREE.Quaternion>(new THREE.Quaternion());
+  const initialYawOffsetRef = useRef<number | null>(null);
+  const hasGyroSensorRef = useRef<boolean>(false);
 
   // Wave & Spawning
   const lastSpawnTimeRef = useRef<number>(0);
@@ -224,110 +249,46 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [mode, wave]);
 
-  // Handle Gyroscope Orientation with smooth relative delta / motion rate
-  const lastGyroRef = useRef<{ alpha: number; beta: number; gamma: number } | null>(null);
-
+  // Recenter signal trigger from HUD / parent
   useEffect(() => {
-    if (!settings.gyroEnabled) {
-      lastGyroRef.current = null;
-      return;
-    }
+    initialYawOffsetRef.current = null;
+  }, [recenterSignal]);
 
-    let usesMotion = false;
-
-    // 1. Preferred high-precision Gyro rate via DeviceMotionEvent
-    const handleMotion = (e: DeviceMotionEvent) => {
-      const rr = e.rotationRate;
-      if (!rr || (rr.alpha === null && rr.beta === null && rr.gamma === null)) return;
-
-      usesMotion = true;
-      const alpha = rr.alpha || 0; // deg/sec
-      const beta = rr.beta || 0;   // deg/sec
-      const gamma = rr.gamma || 0; // deg/sec
-
-      const dt = (e.interval ? e.interval / 1000 : 0.016);
-      const screenOrient = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
-
-      let yawSpeed = 0;
-      let pitchSpeed = 0;
-
-      if (screenOrient === 90) {
-        yawSpeed = -beta;
-        pitchSpeed = -gamma;
-      } else if (screenOrient === -90 || screenOrient === 270) {
-        yawSpeed = beta;
-        pitchSpeed = gamma;
-      } else {
-        // Portrait
-        yawSpeed = -gamma;
-        pitchSpeed = beta;
-      }
-
-      const gyroSens = (settings.sensitivity || 1.2) * 0.025;
-      yawRef.current += THREE.MathUtils.degToRad(yawSpeed) * dt * gyroSens * 50;
-      pitchRef.current += THREE.MathUtils.degToRad(pitchSpeed) * dt * gyroSens * 50;
-      pitchRef.current = THREE.MathUtils.clamp(pitchRef.current, -Math.PI / 2.2, Math.PI / 2.2);
-    };
-
-    // 2. Fallback relative orientation delta via DeviceOrientationEvent
+  // Handle Gyroscope Orientation via standard Three.js deviceorientation
+  useEffect(() => {
     const handleOrientation = (e: DeviceOrientationEvent) => {
-      if (usesMotion) return; // motion rate takes precedence
+      if (!settings.gyroEnabled) return;
       if (e.alpha === null && e.beta === null && e.gamma === null) return;
+
+      hasGyroSensorRef.current = true;
 
       const alpha = e.alpha || 0;
       const beta = e.beta || 0;
       const gamma = e.gamma || 0;
+      const orient = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
 
-      if (!lastGyroRef.current) {
-        lastGyroRef.current = { alpha, beta, gamma };
-        return;
+      const qRaw = computeDeviceQuaternion(alpha, beta, gamma, orient);
+
+      // Get forward vector (0, 0, -1) rotated by qRaw to extract current heading
+      const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(qRaw);
+      const heading = Math.atan2(forwardVec.x, -forwardVec.z);
+
+      if (initialYawOffsetRef.current === null) {
+        initialYawOffsetRef.current = heading;
       }
 
-      let dAlpha = alpha - lastGyroRef.current.alpha;
-      let dBeta = beta - lastGyroRef.current.beta;
-      let dGamma = gamma - lastGyroRef.current.gamma;
+      const yawOffset = initialYawOffsetRef.current;
+      const yawOffsetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -yawOffset);
 
-      // Handle 360 wrap around
-      if (dAlpha > 180) dAlpha -= 360;
-      if (dAlpha < -180) dAlpha += 360;
-
-      // Filter out glitchy spikes
-      if (Math.abs(dAlpha) > 25) dAlpha = 0;
-      if (Math.abs(dBeta) > 25) dBeta = 0;
-      if (Math.abs(dGamma) > 25) dGamma = 0;
-
-      lastGyroRef.current = { alpha, beta, gamma };
-
-      const screenOrient = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
-
-      let dYaw = 0;
-      let dPitch = 0;
-
-      if (screenOrient === 90) {
-        dYaw = -dBeta;
-        dPitch = -dGamma;
-      } else if (screenOrient === -90 || screenOrient === 270) {
-        dYaw = dBeta;
-        dPitch = dGamma;
-      } else {
-        dYaw = -dAlpha;
-        dPitch = dBeta;
-      }
-
-      const gyroSens = (settings.sensitivity || 1.2) * 0.02;
-      yawRef.current += THREE.MathUtils.degToRad(dYaw) * gyroSens;
-      pitchRef.current += THREE.MathUtils.degToRad(dPitch) * gyroSens;
-      pitchRef.current = THREE.MathUtils.clamp(pitchRef.current, -Math.PI / 2.2, Math.PI / 2.2);
+      // Final camera quaternion is relative to the calibrated offset
+      deviceQuatRef.current.copy(yawOffsetQuat).multiply(qRaw);
     };
 
-    window.addEventListener('devicemotion', handleMotion, true);
     window.addEventListener('deviceorientation', handleOrientation, true);
-
     return () => {
-      window.removeEventListener('devicemotion', handleMotion, true);
       window.removeEventListener('deviceorientation', handleOrientation, true);
     };
-  }, [settings.gyroEnabled, settings.sensitivity]);
+  }, [settings.gyroEnabled]);
 
   // --- ROOM BUILDER ---
   const buildRoomEnvironment = (scene: THREE.Scene) => {
@@ -841,33 +802,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     onShotFired(hitSomething);
   };
 
-  // --- TOUCH & DRAG LOOK CONTROLS ---
-  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
-    isDraggingRef.current = true;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    lastTouchRef.current = { x: clientX, y: clientY };
-  };
+  // --- DESKTOP FALLBACK LOOK & CLICK TO SHOOT ---
+  const handlePointerMove = (e: React.PointerEvent) => {
+    // If real mobile gyro sensors are active, do not allow desktop drag look
+    if (hasGyroSensorRef.current && settings.gyroEnabled) return;
 
-  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
-    if (!isDraggingRef.current) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    const deltaX = clientX - lastTouchRef.current.x;
-    const deltaY = clientY - lastTouchRef.current.y;
-    lastTouchRef.current = { x: clientX, y: clientY };
-
-    const sens = (settings.sensitivity || 1.2) * 0.003;
-    yawRef.current -= deltaX * sens;
-    pitchRef.current -= deltaY * sens;
-
-    // Clamp pitch (-85deg to +85deg)
-    pitchRef.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitchRef.current));
-  };
-
-  const handleTouchEnd = () => {
-    isDraggingRef.current = false;
+    if (e.buttons === 1 || e.pointerType === 'mouse') {
+      const sens = (settings.sensitivity || 1.2) * 0.003;
+      yawRef.current -= e.movementX * sens;
+      pitchRef.current -= e.movementY * sens;
+      pitchRef.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitchRef.current));
+    }
   };
 
   // --- MAIN GAME LOOP (60 FPS) ---
@@ -889,10 +834,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (!camera || !scene || !renderer) return;
 
       // 1. UPDATE CAMERA ROTATION
-      const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-      euler.x = pitchRef.current;
-      euler.y = yawRef.current;
-      camera.quaternion.setFromEuler(euler);
+      if (hasGyroSensorRef.current && settings.gyroEnabled) {
+        // Direct Gyroscope Device Motion Orientation
+        camera.quaternion.copy(deviceQuatRef.current);
+
+        // Derive current look direction for raycasting & warning overlays
+        const lookDir = new THREE.Vector3();
+        camera.getWorldDirection(lookDir);
+        yawRef.current = Math.atan2(-lookDir.x, -lookDir.z);
+        pitchRef.current = Math.asin(THREE.MathUtils.clamp(lookDir.y, -0.98, 0.98));
+      } else {
+        // Desktop / Preview Fallback (when no motion sensors exist)
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        euler.x = pitchRef.current;
+        euler.y = yawRef.current;
+        camera.quaternion.setFromEuler(euler);
+      }
 
       // Recoil Recovery
       if (recoilRef.current > 0) {
@@ -1059,13 +1016,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ref={mountRef}
       id="game-canvas-container"
       className="relative w-full h-full touch-none select-none overflow-hidden cursor-crosshair bg-black"
-      onMouseDown={handleTouchStart}
-      onMouseMove={handleTouchMove}
-      onMouseUp={handleTouchEnd}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onClick={handleShoot}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        handleShoot();
+      }}
+      onPointerMove={handlePointerMove}
     >
       {/* Click To Fire Crosshair Overlay */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">

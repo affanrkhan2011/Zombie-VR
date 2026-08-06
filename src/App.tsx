@@ -33,6 +33,7 @@ export default function App() {
   const [isDamaged, setIsDamaged] = useState<boolean>(false);
   const [warnings, setWarnings] = useState<DirectionalWarning[]>([]);
   const [waveBonusMessage, setWaveBonusMessage] = useState<string | null>(null);
+  const [recenterSignal, setRecenterSignal] = useState<number>(0);
 
   // Persistent High Scores
   const [highScore, setHighScore] = useState<number>(() => {
@@ -43,18 +44,22 @@ export default function App() {
   });
 
   const requestGyroPermission = async () => {
-    if (
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
-    ) {
-      try {
-        const state = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
-        if (state === 'granted') {
-          setSettings(prev => ({ ...prev, gyroEnabled: true }));
-        }
-      } catch (err) {
-        console.warn('Gyro permission error:', err);
+    try {
+      if (
+        typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
+      ) {
+        await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
       }
+      if (
+        typeof DeviceMotionEvent !== 'undefined' &&
+        typeof (DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
+      ) {
+        await (DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
+      }
+      setSettings(prev => ({ ...prev, gyroEnabled: true }));
+    } catch (err) {
+      console.warn('Gyro permission request:', err);
     }
   };
 
@@ -64,6 +69,7 @@ export default function App() {
     setMode(selectedMode);
     setIsPaused(false);
     setWaveBonusMessage(null);
+    setRecenterSignal(prev => prev + 1);
     setStats({
       hp: 150,
       maxHp: 150,
@@ -178,6 +184,7 @@ export default function App() {
             isPaused={isPaused}
             wave={stats.wave}
             hp={stats.hp}
+            recenterSignal={recenterSignal}
             onPlayerHit={handlePlayerHit}
             onZombieKill={handleZombieKill}
             onTargetHit={handleTargetHit}
@@ -198,6 +205,7 @@ export default function App() {
             onUpdateSettings={handleUpdateSettings}
             onRestartGame={() => handleStartGame(mode)}
             onExitHome={() => setMode('HOME')}
+            onRecenterGyro={() => setRecenterSignal(prev => prev + 1)}
           />
         </div>
       )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameMode, PlayerStats, GameSettings, DirectionalWarning } from '../types';
-import { Shield, Flame, Target as TargetIcon, Volume2, VolumeX, Pause, Play, Compass, RefreshCw, Eye, Smartphone, Zap } from 'lucide-react';
+import { Shield, Flame, Target as TargetIcon, Volume2, VolumeX, Pause, Play, Compass, RefreshCw, Eye, Smartphone, Zap, Crosshair } from 'lucide-react';
 
 interface GameHUDProps {
   mode: GameMode;
@@ -15,6 +15,7 @@ interface GameHUDProps {
   onRestartGame: () => void;
   onExitHome: () => void;
   onResetPracticeTargets?: () => void;
+  onRecenterGyro?: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -30,6 +31,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onRestartGame,
   onExitHome,
   onResetPracticeTargets,
+  onRecenterGyro,
 }) => {
   const hpPercent = Math.max(0, Math.min(100, (stats.hp / stats.maxHp) * 100));
 
@@ -128,7 +130,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         )}
 
         {/* QUICK CONTROL ACTION BUTTONS */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          {onRecenterGyro && (
+            <button
+              onClick={onRecenterGyro}
+              className="px-2.5 py-1.5 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-600/80 text-red-300 font-extrabold text-xs flex items-center gap-1 transition shadow-lg active:scale-95"
+              title="Re-Center Gyro Aim"
+            >
+              <Crosshair className="w-4 h-4 text-red-400" />
+              <span className="hidden sm:inline">CENTER AIM</span>
+            </button>
+          )}
+
           {mode === 'PRACTICE' && onResetPracticeTargets && (
             <button
               onClick={onResetPracticeTargets}
