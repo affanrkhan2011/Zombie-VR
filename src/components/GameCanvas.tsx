@@ -62,10 +62,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Gun & Laser
   const gunGroupRef = useRef<THREE.Group | null>(null);
   const laserMeshRef = useRef<THREE.Mesh | null>(null);
-  const laserDotRef = useRef<THREE.Mesh | null>(null);
   const muzzleFlashLightRef = useRef<THREE.PointLight | null>(null);
   const muzzleFlashMeshRef = useRef<THREE.Mesh | null>(null);
   const flashlightRef = useRef<THREE.SpotLight | null>(null);
+
+  // Environment Refs for Theme alternating
+  const envMaterialsRef = useRef<{
+    floor: THREE.MeshStandardMaterial;
+    ceiling: THREE.MeshStandardMaterial;
+    wall: THREE.MeshStandardMaterial;
+    crate: THREE.MeshStandardMaterial;
+  } | null>(null);
+  
+  const lightsRef = useRef<{
+    ambient: THREE.AmbientLight;
+    emergency: THREE.PointLight;
+    corner1: THREE.PointLight;
+    corner2: THREE.PointLight;
+  } | null>(null);
 
   // Game state refs inside loop
   const zombiesRef = useRef<Zombie[]>([]);
@@ -144,6 +158,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     cornerLight2.position.set(8, 3, 8);
     scene.add(cornerLight2);
 
+    lightsRef.current = {
+      ambient: ambientLight,
+      emergency: emergencyLight,
+      corner1: cornerLight1,
+      corner2: cornerLight2
+    };
+
     // --- FLASHLIGHT ---
     const flashlight = new THREE.SpotLight(0xfff0dd, 4.0, 22, Math.PI / 6, 0.4, 1.5);
     flashlight.position.set(0, 1.6, 0);
@@ -171,17 +192,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const laserMesh = new THREE.Mesh(laserGeo, laserMat);
     gunGroup.add(laserMesh);
     laserMeshRef.current = laserMesh;
-
-    // Laser Dot at Hit Point
-    const laserDotMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(settings.laserColor || '#ff0033'),
-      transparent: true,
-      opacity: 0.9,
-    });
-    const laserDotGeo = new THREE.SphereGeometry(0.035, 12, 12);
-    const laserDot = new THREE.Mesh(laserDotGeo, laserDotMat);
-    scene.add(laserDot);
-    laserDotRef.current = laserDot;
 
     // Muzzle Flash
     const muzzleLight = new THREE.PointLight(0xffaa22, 0, 5);
@@ -218,13 +228,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Update Laser Color or Flashlight based on Settings
   useEffect(() => {
-    if (laserMeshRef.current && laserDotRef.current) {
+    if (laserMeshRef.current) {
       const col = new THREE.Color(settings.laserColor || '#ff0033');
       (laserMeshRef.current.material as THREE.MeshBasicMaterial).color = col;
-      (laserDotRef.current.material as THREE.MeshBasicMaterial).color = col;
-    }
-    if (flashlightRef.current) {
-      flashlightRef.current.visible = settings.flashlightOn;
     }
     soundManager.setMuted(!settings.soundEnabled);
   }, [settings]);
@@ -290,6 +296,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
   }, [settings.gyroEnabled]);
 
+  // Theme Switching
+  useEffect(() => {
+    const isLightWave = mode === 'PLAY' && wave % 2 === 0;
+
+    if (envMaterialsRef.current) {
+      envMaterialsRef.current.floor.color.setHex(isLightWave ? 0xdddddd : 0x18181f);
+      envMaterialsRef.current.ceiling.color.setHex(isLightWave ? 0xeeeeee : 0x0c0b10);
+      envMaterialsRef.current.wall.color.setHex(isLightWave ? 0xcccccc : 0x22222a);
+      envMaterialsRef.current.crate.color.setHex(isLightWave ? 0xaaaaaa : 0x3d352e);
+    }
+    
+    if (lightsRef.current) {
+      if (isLightWave) {
+        lightsRef.current.ambient.color.setHex(0xffffff);
+        lightsRef.current.ambient.intensity = 1.0;
+        lightsRef.current.emergency.intensity = 0; // turn off red light
+        lightsRef.current.corner1.intensity = 0;
+        lightsRef.current.corner2.intensity = 0;
+      } else {
+        lightsRef.current.ambient.color.setHex(0x221525);
+        lightsRef.current.ambient.intensity = 0.8;
+        lightsRef.current.emergency.intensity = 2.5;
+        lightsRef.current.corner1.intensity = 1.2;
+        lightsRef.current.corner2.intensity = 1.2;
+      }
+    }
+    if (flashlightRef.current) {
+      flashlightRef.current.visible = !isLightWave;
+    }
+  }, [wave, mode]);
+
   // --- ROOM BUILDER ---
   const buildRoomEnvironment = (scene: THREE.Scene) => {
     const roomSize = 30;
@@ -344,6 +381,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Decorative Pillars & Industrial Crates
     const crateMat = new THREE.MeshStandardMaterial({ color: 0x3d352e, roughness: 0.8 });
+    
+    envMaterialsRef.current = {
+      floor: floorMat,
+      ceiling: ceilingMat,
+      wall: wallMat,
+      crate: crateMat
+    };
     const cratePositions = [
       [-10, 1, -10], [11, 1, -8], [-9, 1, 11], [10, 1, 10],
       [-12, 1.2, 2], [12, 1.2, -3], [3, 0.8, -12], [-4, 0.8, 12]
@@ -361,8 +405,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const createGunModel = (): THREE.Group => {
     const gun = new THREE.Group();
 
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x88888c, roughness: 0.3, metalness: 0.8 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x55555a, roughness: 0.5 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.8 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 });
     const redMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
 
     // Barrel
@@ -399,11 +443,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // --- ZOMBIE 3D MODEL GENERATOR ---
   const createZombieMesh = (zombie: Zombie): THREE.Group => {
+    const isLightWave = mode === 'PLAY' && wave % 2 === 0;
     const group = new THREE.Group();
 
     // White character base color with subtle tint variations per type
-    let bodyColor = 0xffffff; // Stark White
-    let clothesColor = 0xe0e0e0; // Bright off-white
+    let bodyColor = isLightWave ? 0x111111 : 0xffffff;
+    let clothesColor = isLightWave ? 0x222222 : 0xe0e0e0;
     let scale = 1.0;
 
     if (zombie.type === 'RUNNER') {
@@ -877,17 +922,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (intersects.length > 0) {
         for (const hit of intersects) {
           // Ignore laser beam itself
-          if (hit.object !== laserMeshRef.current && hit.object !== laserDotRef.current) {
+          if (hit.object !== laserMeshRef.current) {
             laserDist = hit.distance;
-            if (laserDotRef.current) {
-              laserDotRef.current.position.copy(hit.point);
-              laserDotRef.current.visible = true;
-            }
             break;
           }
         }
-      } else if (laserDotRef.current) {
-        laserDotRef.current.visible = false;
       }
 
       if (laserMeshRef.current) {

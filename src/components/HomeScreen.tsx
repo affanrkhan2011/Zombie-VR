@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameMode, GameSettings } from '../types';
-import { Play, Target as TargetIcon, ShieldAlert, Volume2, VolumeX, Smartphone, Eye, Flame, Trophy, Crosshair, Zap } from 'lucide-react';
+import { Play, Volume2, VolumeX, Smartphone } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 
 interface HomeScreenProps {
@@ -26,123 +26,88 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   return (
-    <div id="home-screen" className="relative w-full h-full bg-zinc-950 text-white flex flex-col items-center justify-between p-4 sm:p-8 select-none overflow-y-auto">
-      {/* Background scary glow FX */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-950/40 via-zinc-950/80 to-black pointer-events-none"></div>
+    <div id="home-screen" className="relative w-full h-full bg-black text-white flex flex-col justify-between p-6 sm:p-12 select-none overflow-y-auto font-sans">
+      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-600 to-black"></div>
 
-      {/* Header Title Section */}
-      <div className="relative z-10 text-center mt-6 sm:mt-10 max-w-xl">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/80 border border-red-700/60 text-red-400 text-xs font-black uppercase tracking-widest mb-3 animate-pulse">
-          <Flame className="w-4 h-4 text-red-500" /> 360° VR MOB GAME
-        </div>
-
-        <h1 className="text-4xl sm:text-6xl font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-b from-red-500 via-red-600 to-red-900 drop-shadow-[0_5px_15px_rgba(220,38,38,0.5)]">
-          ZOMBIE VR
+      <div className="relative z-10 max-w-2xl mt-12">
+        <h1 className="text-6xl sm:text-8xl font-display uppercase tracking-wider text-[#ff3300] leading-none">
+          OUTBREAK
         </h1>
-        <div className="text-sm sm:text-lg font-bold tracking-widest text-red-200/90 uppercase -mt-1">
-          SURVIVAL OUTBREAK
-        </div>
-        <p className="text-xs sm:text-sm text-gray-400 mt-2 font-medium">
-          Surround sound 3D dark horror shooter. Turn 360 degrees, watch your back, and eliminate the horde.
+        <p className="mt-6 text-lg sm:text-xl text-gray-300 max-w-md font-mono">
+          3D survival horror. Survive the horde.
         </p>
       </div>
 
-      {/* MODE SELECTION BUTTONS (PLAY vs PRACTICE) */}
-      <div className="relative z-10 w-full max-w-md my-6 flex flex-col gap-4">
-        {/* PLAY MODE CARD */}
+      <div className="relative z-10 w-full max-w-lg mt-16 space-y-8">
         <button
           onClick={() => handleStart('PLAY')}
-          className="group relative w-full bg-gradient-to-r from-red-950/90 via-red-900/80 to-zinc-900 border-2 border-red-600/80 hover:border-red-500 rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 hover:scale-[1.02] shadow-[0_0_25px_rgba(185,28,28,0.35)] flex items-center justify-between overflow-hidden min-h-[110px]"
+          className="group w-full flex items-center justify-between py-4 border-b-2 border-red-900/50 hover:border-[#ff3300] transition-colors"
         >
-          <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-red-600/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition"></div>
-          <div>
-            <div className="flex items-center gap-2 text-xs font-extrabold text-red-400 uppercase tracking-wider mb-1">
-              <ShieldAlert className="w-4 h-4 text-red-500" /> SURVIVAL
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white tracking-wide uppercase flex items-center gap-2">
-              PLAY MODE <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 fill-amber-400" />
-            </div>
-          </div>
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-red-600 group-hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
-            <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-current ml-0.5" />
-          </div>
+          <span className="text-4xl sm:text-5xl font-display tracking-wide text-white group-hover:text-[#ff3300] transition-colors">
+            SURVIVAL
+          </span>
+          <Play className="w-8 h-8 sm:w-10 sm:h-10 text-[#ff3300] opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all" />
         </button>
 
-        {/* PRACTICE MODE CARD */}
         <button
           onClick={() => handleStart('PRACTICE')}
-          className="group relative w-full bg-zinc-900/90 hover:bg-zinc-800/90 border-2 border-amber-600/60 hover:border-amber-500 rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 hover:scale-[1.02] shadow-xl flex items-center justify-between overflow-hidden min-h-[110px]"
+          className="group w-full flex items-center justify-between py-4 border-b-2 border-zinc-900 hover:border-white transition-colors"
         >
-          <div>
-            <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-1">
-              <Crosshair className="w-4 h-4 text-amber-500" /> TARGET RANGE
-            </div>
-            <div className="text-2xl font-black text-white tracking-wide uppercase">
-              PRACTICE
-            </div>
-          </div>
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-600 group-hover:bg-amber-500 text-white flex items-center justify-center transition shadow-lg shrink-0">
-            <TargetIcon className="w-6 h-6 sm:w-7 sm:h-7" />
-          </div>
+          <span className="text-4xl sm:text-5xl font-display tracking-wide text-gray-500 group-hover:text-white transition-colors">
+            PRACTICE
+          </span>
+          <Play className="w-8 h-8 sm:w-10 sm:h-10 text-white opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all" />
         </button>
       </div>
 
-      {/* QUICK SETTINGS & HIGH SCORES */}
-      <div className="relative z-10 w-full max-w-md bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 backdrop-blur-md">
-        <div className="flex items-center justify-between mb-3 text-xs font-extrabold text-gray-400 uppercase tracking-wider">
-          <span className="flex items-center gap-1.5 text-amber-400">
-            <Trophy className="w-4 h-4" /> RECORDS
-          </span>
-          <span>BEST WAVE: <strong className="text-white font-mono">{maxWave}</strong></span>
-          <span>HIGH KILLS: <strong className="text-red-400 font-mono">{highScore}</strong></span>
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-end justify-between mt-16 gap-8">
+        <div className="flex gap-12 font-mono text-sm">
+          <div>
+            <div className="text-gray-500 uppercase">Best Wave</div>
+            <div className="text-2xl text-white mt-1">{maxWave}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 uppercase">High Kills</div>
+            <div className="text-2xl text-[#ff3300] mt-1">{highScore}</div>
+          </div>
         </div>
 
-        {/* CONTROLS GUIDE TOGGLE */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => setShowGuide(!showGuide)}
-            className="text-xs text-red-400 hover:text-red-300 font-bold underline"
+            className="text-sm font-mono text-gray-500 hover:text-white uppercase transition-colors"
           >
-            {showGuide ? 'Hide Instructions' : 'How to Play & Controls'}
+            {showGuide ? 'Close Info' : 'Rules'}
           </button>
-
-          <div className="flex items-center gap-2">
+          
+          <div className="flex gap-2">
             <button
               onClick={() => onUpdateSettings({ soundEnabled: !settings.soundEnabled })}
-              className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-gray-300 transition"
-              title="Toggle Audio"
+              className={`p-3 rounded-none transition-colors ${settings.soundEnabled ? 'bg-[#ff3300] text-black' : 'bg-zinc-900 text-gray-600'}`}
             >
-              {settings.soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-gray-500" />}
+              {settings.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </button>
-
             <button
               onClick={() => onUpdateSettings({ gyroEnabled: !settings.gyroEnabled })}
-              className={`p-2 rounded-lg transition ${
-                settings.gyroEnabled ? 'bg-emerald-950 border border-emerald-500 text-emerald-400' : 'bg-zinc-800 text-gray-500'
-              }`}
-              title="Toggle Gyroscope Look"
+              className={`p-3 rounded-none transition-colors ${settings.gyroEnabled ? 'bg-white text-black' : 'bg-zinc-900 text-gray-600'}`}
             >
-              <Smartphone className="w-4 h-4" />
+              <Smartphone className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* HOW TO PLAY ACCORDION */}
-        {showGuide && (
-          <div className="mt-3 p-3 bg-black/60 rounded-xl text-xs text-gray-300 space-y-1.5 border border-zinc-800 leading-relaxed">
-            <div className="text-red-400 font-bold uppercase mb-1">🎮 GAME CONTROLS & RULES:</div>
-            <div>• <strong>Aiming:</strong> Drag across screen or turn your phone if Gyro is ON.</div>
-            <div>• <strong>Firing:</strong> Tap/Click anywhere on screen. Gun features a red laser sight and infinite ammo (no reload).</div>
-            <div>• <strong>Surround Warnings:</strong> Watch the top compass radar for incoming zombies from behind or sides!</div>
-            <div>• <strong>Health System:</strong> 150 HP max. Zombie bite = -10 HP. Gain +1 HP per kill, +5 HP per wave.</div>
-          </div>
-        )}
       </div>
 
-      {/* FOOTER */}
-      <div className="relative z-10 text-[10px] text-gray-600 mt-4 text-center">
-        VR MOB SHOOTER • HIGH-PERFORMANCE THREE.JS WEBGL ENGINE
-      </div>
+      {showGuide && (
+        <div className="relative z-20 mt-8 p-6 bg-zinc-900 text-sm font-mono text-gray-300 max-w-lg">
+          <div className="text-[#ff3300] uppercase mb-4 text-base">Rules of Engagement</div>
+          <ul className="space-y-3">
+            <li><span className="text-white">Aim:</span> Drag to look. Rotate phone if Gyro ON.</li>
+            <li><span className="text-white">Fire:</span> Tap anywhere. Infinite ammo.</li>
+            <li><span className="text-white">Health:</span> 150 HP. Bite = -10 HP.</li>
+            <li><span className="text-white">Rewards:</span> +1 HP per kill, +5 HP per wave.</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

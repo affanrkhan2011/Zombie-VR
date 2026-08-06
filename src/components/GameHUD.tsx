@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameMode, PlayerStats, GameSettings, DirectionalWarning } from '../types';
-import { Shield, Flame, Target as TargetIcon, Volume2, VolumeX, Pause, Play, Compass, RefreshCw, Eye, Smartphone, Zap, Crosshair } from 'lucide-react';
+import { Shield, Flame, Target as TargetIcon, Volume2, VolumeX, Pause, Play, Compass, RefreshCw, Eye, Smartphone, Zap, Crosshair, ArrowLeft, ArrowRight, ArrowDown } from 'lucide-react';
 
 interface GameHUDProps {
   mode: GameMode;
@@ -50,84 +50,72 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* WAVE BONUS ANNOUNCEMENT */}
       {waveBonusMessage && (
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-950/90 border-2 border-red-500 text-red-100 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-md flex flex-col items-center animate-bounce z-20">
-          <div className="text-2xl font-black tracking-widest text-red-400 uppercase drop-shadow">
-            WAVE COMPLETED!
-          </div>
-          <div className="text-sm font-semibold text-emerald-400 mt-1 flex items-center gap-1">
-            <Zap className="w-4 h-4" /> {waveBonusMessage}
-          </div>
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20 font-mono text-center">
+          <div className="text-2xl text-white uppercase mb-2">WAVE CLEARED</div>
+          <div className="text-sm text-[#ff3300] uppercase tracking-widest">{waveBonusMessage}</div>
         </div>
       )}
 
       {/* DANGER / SPATIAL WARNING TEXT */}
       {mode === 'PLAY' && !isPaused && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20">
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none z-20 font-mono">
           {behindThreat && (
-            <div id="warning-behind" className="bg-red-600 text-white font-black text-xs sm:text-sm px-4 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.6)] border border-red-400 flex items-center gap-2 animate-pulse">
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white"></div>
-              BEHIND YOU
+            <div className="text-[#ff3300] text-sm uppercase tracking-[0.2em] animate-pulse">
+              [ BEHIND YOU ]
             </div>
           )}
           {leftThreat && !behindThreat && (
-            <div id="warning-left" className="bg-red-900/90 text-red-200 font-bold text-[10px] sm:text-xs px-3 py-1 rounded-full uppercase shadow-lg border border-red-700/50 flex items-center gap-2">
-              <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[7px] border-r-red-400"></div>
-              LEFT THREAT
+            <div className="text-white text-sm uppercase tracking-[0.2em]">
+              [ LEFT THREAT ]
             </div>
           )}
           {rightThreat && !behindThreat && (
-            <div id="warning-right" className="bg-red-900/90 text-red-200 font-bold text-[10px] sm:text-xs px-3 py-1 rounded-full uppercase shadow-lg border border-red-700/50 flex items-center gap-2">
-              RIGHT THREAT
-              <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[7px] border-l-red-400"></div>
+            <div className="text-white text-sm uppercase tracking-[0.2em]">
+              [ RIGHT THREAT ]
             </div>
           )}
         </div>
       )}
 
       {/* TOP BAR HUD */}
-      <div className="flex items-start justify-between w-full pointer-events-auto gap-2">
+      <div className="flex items-start justify-between w-full pointer-events-auto gap-2 font-mono">
         {/* PLAYER HEALTH BAR */}
-        <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-red-900/60 rounded-xl p-2 shadow-lg min-w-[140px] sm:min-w-[200px]">
-          <Shield className={`w-6 h-6 sm:w-8 sm:h-8 ${stats.hp <= 30 ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`} />
-          <div className="flex-1">
-            <div className="flex justify-between items-center text-[10px] sm:text-xs font-bold mb-1">
-              <span className="text-red-400 tracking-wider hidden sm:inline">HEALTH</span>
-              <span className={`font-mono ${stats.hp <= 30 ? 'text-red-500 font-extrabold' : 'text-gray-200'}`}>
-                {stats.hp}
-              </span>
-            </div>
-            <div className="w-full bg-gray-900 h-2 sm:h-2.5 rounded-full overflow-hidden border border-red-950">
-              <div
-                className={`h-full transition-all duration-300 ${
-                  stats.hp > 75 ? 'bg-gradient-to-r from-emerald-500 to-green-400' : stats.hp > 30 ? 'bg-amber-500' : 'bg-red-600 animate-pulse'
-                }`}
-                style={{ width: `${hpPercent}%` }}
-              ></div>
-            </div>
+        <div className="flex flex-col min-w-[140px] sm:min-w-[200px]">
+          <div className="flex justify-between items-end mb-1">
+            <span className="text-[#ff3300] uppercase text-xs">HP</span>
+            <span className={`text-xl leading-none ${stats.hp <= 30 ? 'text-[#ff3300] animate-pulse' : 'text-white'}`}>
+              {stats.hp}
+            </span>
+          </div>
+          <div className="w-full bg-zinc-900 h-1">
+            <div
+              className={`h-full transition-all duration-300 ${stats.hp <= 30 ? 'bg-[#ff3300]' : 'bg-white'}`}
+              style={{ width: `${hpPercent}%` }}
+            ></div>
           </div>
         </div>
 
         {/* MODE STATS BADGES */}
         {mode === 'PLAY' ? (
-          <div className="flex items-center gap-1 sm:gap-2">
-            <div className="bg-red-950/90 border border-red-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
-              <div className="text-[9px] sm:text-[10px] text-red-400 uppercase font-extrabold hidden sm:block">WAVE</div>
-              <div className="text-base sm:text-lg font-black text-white font-mono">{stats.wave}</div>
+          <div className="flex items-center gap-6 text-sm uppercase">
+            <div className="flex flex-col">
+              <span className="text-gray-500">Wave</span>
+              <span className="text-white text-xl leading-none">{stats.wave}</span>
             </div>
-            <div className="bg-zinc-900/90 border border-zinc-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
-              <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-extrabold hidden sm:block">KILLS</div>
-              <div className="text-base sm:text-lg font-black text-red-500 font-mono">{stats.kills}</div>
+            <div className="flex flex-col">
+              <span className="text-gray-500">Kills</span>
+              <span className="text-[#ff3300] text-xl leading-none">{stats.kills}</span>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-1 sm:gap-2">
-            <div className="bg-amber-950/90 border border-amber-600/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
-              <div className="text-[9px] sm:text-[10px] text-amber-400 uppercase font-extrabold hidden sm:block">SCORE</div>
-              <div className="text-base sm:text-lg font-black text-amber-200 font-mono">{stats.practiceScore}</div>
+          <div className="flex items-center gap-6 text-sm uppercase">
+            <div className="flex flex-col">
+              <span className="text-gray-500">Score</span>
+              <span className="text-white text-xl leading-none">{stats.practiceScore}</span>
             </div>
-            <div className="bg-zinc-900/90 border border-zinc-700/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-center shadow-lg backdrop-blur-sm min-w-[50px]">
-              <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-extrabold hidden sm:block">HITS</div>
-              <div className="text-base sm:text-lg font-black text-emerald-400 font-mono">{stats.practiceTargetsHit}</div>
+            <div className="flex flex-col">
+              <span className="text-gray-500">Hits</span>
+              <span className="text-white text-xl leading-none">{stats.practiceTargetsHit}</span>
             </div>
           </div>
         )}
@@ -137,17 +125,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {onRecenterGyro && (
             <button
               onClick={onRecenterGyro}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-600/80 text-red-300 transition shadow-lg active:scale-95 flex items-center justify-center min-w-[44px] min-h-[44px]"
+              className="p-2 text-gray-500 hover:text-white transition-colors"
               title="Re-Center Gyro Aim"
             >
-              <Crosshair className="w-5 h-5 sm:w-4 sm:h-4 text-red-400" />
+              <Crosshair className="w-5 h-5" />
             </button>
           )}
 
           {mode === 'PRACTICE' && onResetPracticeTargets && (
             <button
               onClick={onResetPracticeTargets}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-600 text-gray-200 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2 text-gray-500 hover:text-white transition-colors"
               title="Reset Practice Targets"
             >
               <RefreshCw className="w-5 h-5" />
@@ -156,15 +144,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
           <button
             onClick={() => onUpdateSettings({ soundEnabled: !settings.soundEnabled })}
-            className="p-2 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-600 text-gray-200 transition"
+            className="p-2 text-gray-500 hover:text-white transition-colors"
             title="Toggle Sound"
           >
-            {settings.soundEnabled ? <Volume2 className="w-5 h-5 text-emerald-400" /> : <VolumeX className="w-5 h-5 text-gray-500" />}
+            {settings.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
           </button>
 
           <button
             onClick={onTogglePause}
-            className="p-2 rounded-xl bg-red-900/90 hover:bg-red-800 border border-red-700 text-white transition shadow-lg"
+            className="p-2 text-gray-500 hover:text-white transition-colors"
             title="Pause Game"
           >
             <Pause className="w-5 h-5" />
@@ -172,30 +160,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
       </div>
 
-      {/* RADAR COMPASS INDICATOR AT BOTTOM */}
-      {mode === 'PLAY' && (
-        <div className="self-center bg-black/80 border border-red-950 px-4 py-1.5 rounded-full backdrop-blur-md flex items-center gap-3 text-xs text-gray-300 font-mono pointer-events-auto">
-          <Compass className="w-4 h-4 text-red-500" />
-          <span>360° SURROUND THREAT RADAR</span>
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-            <span className="text-[10px] text-red-400">TOUCH LOSS: -10 HP</span>
-          </div>
-        </div>
-      )}
+      {/* RADAR COMPASS INDICATOR AT BOTTOM (REMOVED) */}
 
       {/* PAUSE MODAL OVERLAY */}
       {isPaused && (
-        <div id="pause-modal" className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 pointer-events-auto">
-          <div className="bg-zinc-900 border-2 border-red-800/80 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <h2 className="text-2xl font-black tracking-widest text-red-500 uppercase mb-4 flex items-center justify-center gap-2">
-              <Pause className="w-6 h-6" /> GAME PAUSED
+        <div id="pause-modal" className="fixed inset-0 bg-black/90 flex items-center justify-center p-6 z-50 pointer-events-auto font-mono">
+          <div className="max-w-sm w-full text-center">
+            <h2 className="text-4xl font-display text-white uppercase mb-8">
+              PAUSED
             </h2>
-
-            <div className="space-y-4 mb-6 text-left">
+            <div className="space-y-6 mb-8 text-left">
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 block">
-                  Aim Sensitivity: {settings.sensitivity.toFixed(1)}x
+                <label className="text-sm text-gray-500 uppercase block mb-2">
+                  Sensitivity: {settings.sensitivity.toFixed(1)}x
                 </label>
                 <input
                   type="range"
@@ -204,51 +181,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                   step="0.1"
                   value={settings.sensitivity}
                   onChange={e => onUpdateSettings({ sensitivity: parseFloat(e.target.value) })}
-                  className="w-full accent-red-600"
+                  className="w-full accent-[#ff3300]"
                 />
               </div>
-
-              <div className="flex items-center justify-between bg-zinc-800 p-3 rounded-xl">
-                <span className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-amber-400" /> Mobile Gyro Look
-                </span>
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                <span className="text-sm text-gray-300">Mobile Gyro Look</span>
                 <button
                   onClick={() => onUpdateSettings({ gyroEnabled: !settings.gyroEnabled })}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold ${
-                    settings.gyroEnabled ? 'bg-emerald-600 text-white' : 'bg-zinc-700 text-gray-400'
-                  }`}
+                  className={`text-sm uppercase ${settings.gyroEnabled ? 'text-[#ff3300]' : 'text-gray-600'}`}
                 >
                   {settings.gyroEnabled ? 'ON' : 'OFF'}
                 </button>
               </div>
-
-              <div className="flex items-center justify-between bg-zinc-800 p-3 rounded-xl">
-                <span className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-cyan-400" /> Night Flashlight
-                </span>
-                <button
-                  onClick={() => onUpdateSettings({ flashlightOn: !settings.flashlightOn })}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold ${
-                    settings.flashlightOn ? 'bg-emerald-600 text-white' : 'bg-zinc-700 text-gray-400'
-                  }`}
-                >
-                  {settings.flashlightOn ? 'ON' : 'OFF'}
-                </button>
-              </div>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={onTogglePause}
-                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl transition shadow-lg flex items-center justify-center gap-2"
-              >
-                <Play className="w-5 h-5 fill-current" /> RESUME GAME
+            <div className="flex flex-col gap-4">
+              <button onClick={onTogglePause} className="w-full py-4 bg-white text-black font-display text-2xl uppercase hover:bg-gray-200 transition-colors">
+                RESUME
               </button>
-              <button
-                onClick={onExitHome}
-                className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-gray-300 font-bold rounded-xl transition"
-              >
-                MAIN MENU
+              <button onClick={onExitHome} className="w-full py-4 text-gray-500 font-display text-xl uppercase hover:text-white transition-colors">
+                EXIT
               </button>
             </div>
           </div>
@@ -257,56 +208,37 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* GAME OVER MODAL */}
       {stats.hp <= 0 && mode === 'PLAY' && (
-        <div id="gameover-modal" className="fixed inset-0 bg-black/95 backdrop-blur-lg flex items-center justify-center p-4 z-50 pointer-events-auto animate-fadeIn">
-          <div className="bg-zinc-950 border-2 border-red-600/90 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(220,38,38,0.4)]">
-            <div className="w-16 h-16 bg-red-950 border-2 border-red-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-              <Flame className="w-8 h-8 text-red-500 animate-pulse" />
-            </div>
-
-            <h1 className="text-3xl font-black tracking-widest text-red-600 uppercase mb-1 drop-shadow-lg">
-              YOU WERE OVERRUN
+        <div id="gameover-modal" className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-50 pointer-events-auto font-mono">
+          <div className="max-w-md w-full text-center">
+            <h1 className="text-6xl font-display text-[#ff3300] uppercase mb-8 leading-none">
+              DEAD
             </h1>
-            <p className="text-xs text-red-400/80 uppercase tracking-widest font-semibold mb-6">
-              THE ZOMBIES CLAIMED YOUR SOUL
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 mb-6 text-left">
-              <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
-                <div className="text-[10px] text-gray-400 font-bold uppercase">SURVIVED WAVES</div>
-                <div className="text-xl font-black text-white font-mono">{stats.wave}</div>
+            <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-10 text-left border-y border-zinc-800 py-6">
+              <div>
+                <div className="text-xs text-gray-500 uppercase">Waves</div>
+                <div className="text-2xl text-white mt-1">{stats.wave}</div>
               </div>
-
-              <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
-                <div className="text-[10px] text-gray-400 font-bold uppercase">TOTAL KILLS</div>
-                <div className="text-xl font-black text-red-500 font-mono">{stats.kills}</div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase">Kills</div>
+                <div className="text-2xl text-[#ff3300] mt-1">{stats.kills}</div>
               </div>
-
-              <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
-                <div className="text-[10px] text-gray-400 font-bold uppercase">HEADSHOTS</div>
-                <div className="text-xl font-black text-amber-400 font-mono">{stats.headshots}</div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase">Headshots</div>
+                <div className="text-2xl text-white mt-1">{stats.headshots}</div>
               </div>
-
-              <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl">
-                <div className="text-[10px] text-gray-400 font-bold uppercase">ACCURACY</div>
-                <div className="text-xl font-black text-emerald-400 font-mono">
+              <div>
+                <div className="text-xs text-gray-500 uppercase">Accuracy</div>
+                <div className="text-2xl text-white mt-1">
                   {stats.shotsFired > 0 ? Math.round((stats.shotsHit / stats.shotsFired) * 100) : 0}%
                 </div>
               </div>
             </div>
-
-            <div className="flex flex-col gap-2.5">
-              <button
-                onClick={onRestartGame}
-                className="w-full py-3.5 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-black tracking-wider uppercase rounded-xl transition shadow-xl"
-              >
-                TRY AGAIN
+            <div className="flex flex-col gap-4">
+              <button onClick={onRestartGame} className="w-full py-4 bg-[#ff3300] text-black font-display text-2xl uppercase hover:bg-white transition-colors">
+                RETRY
               </button>
-
-              <button
-                onClick={onExitHome}
-                className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-gray-300 font-bold rounded-xl border border-zinc-800 transition"
-              >
-                RETURN TO MAIN MENU
+              <button onClick={onExitHome} className="w-full py-4 text-gray-500 font-display text-xl uppercase hover:text-white transition-colors">
+                MENU
               </button>
             </div>
           </div>
