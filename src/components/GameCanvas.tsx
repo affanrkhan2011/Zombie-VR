@@ -224,43 +224,110 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [mode, wave]);
 
-  // Handle Gyroscope Orientation
+  // Handle Gyroscope Orientation with smooth relative delta / motion rate
+  const lastGyroRef = useRef<{ alpha: number; beta: number; gamma: number } | null>(null);
+
   useEffect(() => {
-    if (!settings.gyroEnabled) return;
+    if (!settings.gyroEnabled) {
+      lastGyroRef.current = null;
+      return;
+    }
 
-    const handleOrientation = (e: DeviceOrientationEvent) => {
-      if (e.alpha !== null || e.beta !== null || e.gamma !== null) {
-        const alpha = e.alpha || 0; // 0-360 compass/yaw
-        const beta = e.beta || 0;   // -180 to 180 pitch
-        const gamma = e.gamma || 0; // -90 to 90 roll
+    let usesMotion = false;
 
-        const screenOrientation = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
+    // 1. Preferred high-precision Gyro rate via DeviceMotionEvent
+    const handleMotion = (e: DeviceMotionEvent) => {
+      const rr = e.rotationRate;
+      if (!rr || (rr.alpha === null && rr.beta === null && rr.gamma === null)) return;
 
-        let radYaw = 0;
-        let radPitch = 0;
+      usesMotion = true;
+      const alpha = rr.alpha || 0; // deg/sec
+      const beta = rr.beta || 0;   // deg/sec
+      const gamma = rr.gamma || 0; // deg/sec
 
-        if (screenOrientation === 90) {
-          // Landscape Left
-          radYaw = THREE.MathUtils.degToRad(-beta);
-          radPitch = THREE.MathUtils.degToRad(-gamma);
-        } else if (screenOrientation === -90 || screenOrientation === 270) {
-          // Landscape Right
-          radYaw = THREE.MathUtils.degToRad(beta);
-          radPitch = THREE.MathUtils.degToRad(gamma);
-        } else {
-          // Portrait mode
-          radYaw = THREE.MathUtils.degToRad(-alpha);
-          radPitch = THREE.MathUtils.degToRad(beta - 45);
-        }
+      const dt = (e.interval ? e.interval / 1000 : 0.016);
+      const screenOrient = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
 
-        yawRef.current = radYaw;
-        pitchRef.current = THREE.MathUtils.clamp(radPitch, -Math.PI / 2.2, Math.PI / 2.2);
+      let yawSpeed = 0;
+      let pitchSpeed = 0;
+
+      if (screenOrient === 90) {
+        yawSpeed = -beta;
+        pitchSpeed = -gamma;
+      } else if (screenOrient === -90 || screenOrient === 270) {
+        yawSpeed = beta;
+        pitchSpeed = gamma;
+      } else {
+        // Portrait
+        yawSpeed = -gamma;
+        pitchSpeed = beta;
       }
+
+      const gyroSens = (settings.sensitivity || 1.2) * 0.025;
+      yawRef.current += THREE.MathUtils.degToRad(yawSpeed) * dt * gyroSens * 50;
+      pitchRef.current += THREE.MathUtils.degToRad(pitchSpeed) * dt * gyroSens * 50;
+      pitchRef.current = THREE.MathUtils.clamp(pitchRef.current, -Math.PI / 2.2, Math.PI / 2.2);
     };
 
-    window.addEventListener('deviceorientation', handleOrientation);
-    return () => window.removeEventListener('deviceorientation', handleOrientation);
-  }, [settings.gyroEnabled]);
+    // 2. Fallback relative orientation delta via DeviceOrientationEvent
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (usesMotion) return; // motion rate takes precedence
+      if (e.alpha === null && e.beta === null && e.gamma === null) return;
+
+      const alpha = e.alpha || 0;
+      const beta = e.beta || 0;
+      const gamma = e.gamma || 0;
+
+      if (!lastGyroRef.current) {
+        lastGyroRef.current = { alpha, beta, gamma };
+        return;
+      }
+
+      let dAlpha = alpha - lastGyroRef.current.alpha;
+      let dBeta = beta - lastGyroRef.current.beta;
+      let dGamma = gamma - lastGyroRef.current.gamma;
+
+      // Handle 360 wrap around
+      if (dAlpha > 180) dAlpha -= 360;
+      if (dAlpha < -180) dAlpha += 360;
+
+      // Filter out glitchy spikes
+      if (Math.abs(dAlpha) > 25) dAlpha = 0;
+      if (Math.abs(dBeta) > 25) dBeta = 0;
+      if (Math.abs(dGamma) > 25) dGamma = 0;
+
+      lastGyroRef.current = { alpha, beta, gamma };
+
+      const screenOrient = (window.orientation as number) || (screen.orientation ? screen.orientation.angle : 0) || 0;
+
+      let dYaw = 0;
+      let dPitch = 0;
+
+      if (screenOrient === 90) {
+        dYaw = -dBeta;
+        dPitch = -dGamma;
+      } else if (screenOrient === -90 || screenOrient === 270) {
+        dYaw = dBeta;
+        dPitch = dGamma;
+      } else {
+        dYaw = -dAlpha;
+        dPitch = dBeta;
+      }
+
+      const gyroSens = (settings.sensitivity || 1.2) * 0.02;
+      yawRef.current += THREE.MathUtils.degToRad(dYaw) * gyroSens;
+      pitchRef.current += THREE.MathUtils.degToRad(dPitch) * gyroSens;
+      pitchRef.current = THREE.MathUtils.clamp(pitchRef.current, -Math.PI / 2.2, Math.PI / 2.2);
+    };
+
+    window.addEventListener('devicemotion', handleMotion, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion, true);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
+  }, [settings.gyroEnabled, settings.sensitivity]);
 
   // --- ROOM BUILDER ---
   const buildRoomEnvironment = (scene: THREE.Scene) => {
@@ -373,28 +440,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const createZombieMesh = (zombie: Zombie): THREE.Group => {
     const group = new THREE.Group();
 
-    // Color based on Zombie Type
-    let fleshColor = 0x385536; // Walker (decay green)
-    let clothesColor = 0x282c34;
+    // White character base color with subtle tint variations per type
+    let bodyColor = 0xffffff; // Stark White
+    let clothesColor = 0xe0e0e0; // Bright off-white
     let scale = 1.0;
 
     if (zombie.type === 'RUNNER') {
-      fleshColor = 0x5a3422; // Bloody runner
-      clothesColor = 0x421b1b;
+      bodyColor = 0xfff0f0; // Pale blood-tinted white
+      clothesColor = 0xd5c5c5;
       scale = 0.88;
     } else if (zombie.type === 'TANK') {
-      fleshColor = 0x223824; // Big dark brute
-      clothesColor = 0x151618;
+      bodyColor = 0xe6e6e6; // Heavy bone white
+      clothesColor = 0xcccccc;
       scale = 1.5;
     } else if (zombie.type === 'STALKER') {
-      fleshColor = 0x112222; // Shadow ghost
-      clothesColor = 0x05080c;
+      bodyColor = 0xf0f8ff; // Ghostly silver white
+      clothesColor = 0xd8e0e8;
       scale = 1.05;
     }
 
-    const fleshMat = new THREE.MeshStandardMaterial({ color: fleshColor, roughness: 0.8 });
-    const clothesMat = new THREE.MeshStandardMaterial({ color: clothesColor, roughness: 0.9 });
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff1100 }); // Glowing eyes
+    // Bright materials with subtle emissive component for dark visibility
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: bodyColor,
+      roughness: 0.4,
+      emissive: new THREE.Color(bodyColor),
+      emissiveIntensity: 0.15, // Subtle self-glow so they POP in dark room
+    });
+
+    const clothesMat = new THREE.MeshStandardMaterial({
+      color: clothesColor,
+      roughness: 0.5,
+      emissive: new THREE.Color(clothesColor),
+      emissiveIntensity: 0.1,
+    });
+
+    // Vivid glowing red eyes
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
     // Torso
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.8 * scale, 0.35 * scale), clothesMat);
@@ -404,29 +485,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     group.add(torso);
 
     // Head
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4 * scale, 0.45 * scale, 0.4 * scale), fleshMat);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4 * scale, 0.45 * scale, 0.4 * scale), bodyMat);
     head.position.y = 1.65 * scale;
     head.name = 'head'; // For headshot detection!
     head.castShadow = true;
     group.add(head);
 
-    // Eyes
-    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.05 * scale, 8, 8), eyeMat);
-    leftEye.position.set(-0.1 * scale, 1.68 * scale, -0.21 * scale);
+    // Red Eyes - Slightly larger for striking visibility
+    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.07 * scale, 10, 10), eyeMat);
+    leftEye.position.set(-0.11 * scale, 1.68 * scale, -0.21 * scale);
     group.add(leftEye);
 
-    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.05 * scale, 8, 8), eyeMat);
-    rightEye.position.set(0.1 * scale, 1.68 * scale, -0.21 * scale);
+    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.07 * scale, 10, 10), eyeMat);
+    rightEye.position.set(0.11 * scale, 1.68 * scale, -0.21 * scale);
     group.add(rightEye);
 
     // Arms
-    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.7 * scale, 0.2 * scale), fleshMat);
+    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.7 * scale, 0.2 * scale), bodyMat);
     leftArm.position.set(-0.42 * scale, 1.0 * scale, -0.2 * scale);
     leftArm.rotation.x = -Math.PI / 3; // Reaching arms
     leftArm.name = 'leftArm';
     group.add(leftArm);
 
-    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.7 * scale, 0.2 * scale), fleshMat);
+    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.7 * scale, 0.2 * scale), bodyMat);
     rightArm.position.set(0.42 * scale, 1.0 * scale, -0.2 * scale);
     rightArm.rotation.x = -Math.PI / 3;
     rightArm.name = 'rightArm';
