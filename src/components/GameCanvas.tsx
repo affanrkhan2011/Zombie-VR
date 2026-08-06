@@ -1064,19 +1064,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             if (z.health <= 0) {
               z.health = 0;
               z.isDead = true;
-              z.deathTime = Date.now();
-
-              const meshGroup = zombieMeshesRef.current.get(z.id);
-              if (meshGroup) {
-                meshGroup.children.forEach(child => {
-                  if (child.name !== 'healthBarGroup') {
-                    child.visible = false;
-                  }
-                });
-              }
 
               createExplosionParticles(hitPoint, z.type === 'BOSS' ? '#aa00ff' : isHeadshot ? '#ff0000' : '#ffffff', 50);
               onZombieKill(z.id, isHeadshot);
+              finalizeZombieRemoval(z.id);
             }
           }
         }
@@ -1292,23 +1283,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           if (!meshGroup) return;
 
           if (z.isDead) {
-            if (currentTime - (z.deathTime || 0) >= 3000) {
-              idsToRemove.push(z.id);
-            }
-
-            const healthBar = meshGroup.getObjectByName('healthBarGroup');
-            if (healthBar && cameraRef.current) {
-              healthBar.lookAt(cameraRef.current.position);
-
-              const numBlocks = z.type === 'BOSS' ? 20 : 3;
-              for (let i = 0; i < numBlocks; i++) {
-                const blockMesh = healthBar.getObjectByName(`healthBlock_${i}`) as THREE.Mesh;
-                if (blockMesh) {
-                  blockMesh.visible = true;
-                  (blockMesh.material as THREE.MeshBasicMaterial).color.setHex(0x555566);
-                }
-              }
-            }
+            idsToRemove.push(z.id);
             return;
           }
 
