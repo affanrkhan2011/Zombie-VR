@@ -524,42 +524,58 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       scene.add(wall);
     });
 
-    // SOLID INTERIOR WALL BARRIERS (from diagram)
+    // SOLID INTERIOR WALL BARRIERS (from diagram) WITH GLOWING NEON STRIPS
     const interiorWallMat = new THREE.MeshStandardMaterial({
       color: 0x3f4656,
       roughness: 0.5,
       metalness: 0.4,
     });
 
-    MAP_WALLS.forEach(w => {
+    const wallGlowColors = [0x00f0ff, 0xff00aa, 0x00ff88, 0xffaa00, 0xaa00ff];
+    MAP_WALLS.forEach((w, idx) => {
       const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(w.width, 3.5, w.depth), interiorWallMat);
       wallMesh.position.set(w.x, 1.75, w.z);
       if (w.rotY) wallMesh.rotation.y = w.rotY;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
       scene.add(wallMesh);
+
+      // Glowing Neon Cap Strip on top of each wall
+      const glowColor = wallGlowColors[idx % wallGlowColors.length];
+      const glowCapMat = new THREE.MeshBasicMaterial({ color: glowColor });
+      const glowCap = new THREE.Mesh(new THREE.BoxGeometry(w.width + 0.1, 0.12, w.depth + 0.1), glowCapMat);
+      glowCap.position.set(w.x, 3.52, w.z);
+      if (w.rotY) glowCap.rotation.y = w.rotY;
+      scene.add(glowCap);
     });
 
-    // BLUE PLAYER SPAWN POINT MARKER (Center-Right)
+    // BLUE PLAYER SPAWN POINT MARKER (Center-Right) - Vibrant Blue Glow
     const playerSpawnCircle = new THREE.Mesh(
       new THREE.RingGeometry(0.2, 0.9, 32),
-      new THREE.MeshBasicMaterial({ color: 0x0088ff, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: 0x00aaff, side: THREE.DoubleSide })
     );
     playerSpawnCircle.rotation.x = -Math.PI / 2;
     playerSpawnCircle.position.set(BLUE_PLAYER_SPAWN.x, 0.02, BLUE_PLAYER_SPAWN.z);
     scene.add(playerSpawnCircle);
 
-    const blueLight = new THREE.PointLight(0x0088ff, 1.5, 4);
-    blueLight.position.set(BLUE_PLAYER_SPAWN.x, 0.5, BLUE_PLAYER_SPAWN.z);
+    // Glowing Blue Vertical Pillar
+    const blueBeamGeo = new THREE.CylinderGeometry(0.85, 0.85, 3.5, 24, 1, true);
+    const blueBeamMat = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+    const blueBeam = new THREE.Mesh(blueBeamGeo, blueBeamMat);
+    blueBeam.position.set(BLUE_PLAYER_SPAWN.x, 1.75, BLUE_PLAYER_SPAWN.z);
+    scene.add(blueBeam);
+
+    const blueLight = new THREE.PointLight(0x00aaff, 2.5, 6);
+    blueLight.position.set(BLUE_PLAYER_SPAWN.x, 0.8, BLUE_PLAYER_SPAWN.z);
     scene.add(blueLight);
 
-    // GREEN RELOAD ZONE (Bottom-Right)
+    // GREEN RELOAD ZONE (Bottom-Right) - Vibrant Glowing Pad & Light Pillar
     const reloadZoneGeo = new THREE.PlaneGeometry(6, 6);
     const reloadZoneMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
-      roughness: 0.2,
-      emissive: 0x059669,
-      emissiveIntensity: 0.8,
+      color: 0x00ff88,
+      roughness: 0.1,
+      emissive: 0x00ff88,
+      emissiveIntensity: 1.2,
       side: THREE.DoubleSide,
     });
     const reloadZone = new THREE.Mesh(reloadZoneGeo, reloadZoneMat);
@@ -567,30 +583,51 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     reloadZone.position.set(10.5, 0.02, 6.5);
     scene.add(reloadZone);
 
-    const greenZoneLight = new THREE.PointLight(0x10b981, 3.5, 9);
+    // Green Translucent Light Pillar Beam
+    const greenBeamGeo = new THREE.CylinderGeometry(2.9, 2.9, 4.0, 32, 1, true);
+    const greenBeamMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+    const greenBeam = new THREE.Mesh(greenBeamGeo, greenBeamMat);
+    greenBeam.position.set(10.5, 2.0, 6.5);
+    scene.add(greenBeam);
+
+    const greenZoneLight = new THREE.PointLight(0x00ff88, 5.0, 12);
     greenZoneLight.position.set(10.5, 1.5, 6.5);
     scene.add(greenZoneLight);
 
-    // RED ZOMBIE SPAWN MARKERS
+    // RED ZOMBIE SPAWN MARKERS - Glowing Red Shapes & Light Pillars
     RED_ZOMBIE_SPAWNS.forEach(sp => {
-      const redCircle = new THREE.Mesh(
-        new THREE.RingGeometry(0.1, 0.6, 24),
-        new THREE.MeshBasicMaterial({ color: 0xff1100, side: THREE.DoubleSide })
-      );
+      const redCircleMat = new THREE.MeshBasicMaterial({ color: 0xff0044, side: THREE.DoubleSide });
+      const redCircle = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.65, 24), redCircleMat);
       redCircle.rotation.x = -Math.PI / 2;
       redCircle.position.set(sp.x, 0.02, sp.z);
       scene.add(redCircle);
+
+      const redPillarGeo = new THREE.CylinderGeometry(0.6, 0.6, 3.5, 16, 1, true);
+      const redPillarMat = new THREE.MeshBasicMaterial({ color: 0xff0044, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+      const redPillar = new THREE.Mesh(redPillarGeo, redPillarMat);
+      redPillar.position.set(sp.x, 1.75, sp.z);
+      scene.add(redPillar);
+
+      const redLight = new THREE.PointLight(0xff0044, 2.5, 5);
+      redLight.position.set(sp.x, 0.8, sp.z);
+      scene.add(redLight);
     });
 
-    // ORANGE BOSS SPAWN MARKER (Left Wall)
-    const bossStarGeo = new THREE.RingGeometry(0.3, 1.0, 5);
-    const bossStarMat = new THREE.MeshBasicMaterial({ color: 0xff8800, side: THREE.DoubleSide });
+    // ORANGE BOSS SPAWN MARKER (Left Wall) - Glowing Orange Star Shape & Light Beam
+    const bossStarGeo = new THREE.RingGeometry(0.3, 1.2, 5);
+    const bossStarMat = new THREE.MeshBasicMaterial({ color: 0xff7700, side: THREE.DoubleSide });
     const bossStar = new THREE.Mesh(bossStarGeo, bossStarMat);
     bossStar.rotation.x = -Math.PI / 2;
     bossStar.position.set(ORANGE_BOSS_SPAWN.x, 0.02, ORANGE_BOSS_SPAWN.z);
     scene.add(bossStar);
 
-    const orangeLight = new THREE.PointLight(0xff8800, 2.5, 6);
+    const orangePillarGeo = new THREE.CylinderGeometry(1.1, 1.1, 4.0, 20, 1, true);
+    const orangePillarMat = new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    const orangePillar = new THREE.Mesh(orangePillarGeo, orangePillarMat);
+    orangePillar.position.set(ORANGE_BOSS_SPAWN.x, 2.0, ORANGE_BOSS_SPAWN.z);
+    scene.add(orangePillar);
+
+    const orangeLight = new THREE.PointLight(0xff7700, 4.5, 8);
     orangeLight.position.set(ORANGE_BOSS_SPAWN.x, 1.0, ORANGE_BOSS_SPAWN.z);
     scene.add(orangeLight);
 
@@ -985,6 +1022,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const handleShoot = () => {
     if (isPaused || !cameraRef.current || !sceneRef.current) return;
 
+    // GREEN ZONE CHECK: Do NOT allow shooting while standing in the Green Reload Zone (Bottom-Right: x: 7.5 to 13.5, z: 3.5 to 9.5)
+    if (cameraRef.current) {
+      const px = cameraRef.current.position.x;
+      const pz = cameraRef.current.position.z;
+      if (px >= 7.5 && px <= 13.5 && pz >= 3.5 && pz <= 9.5) {
+        soundManager.playEmptyClick();
+        return;
+      }
+    }
+
     // AMMO CHECK: If 0 ammo, play empty click sound & refuse to shoot!
     if (ammo <= 0) {
       soundManager.playEmptyClick();
@@ -1327,7 +1374,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               onPlayerHit(z.damage);
 
               createExplosionParticles(meshGroup.position, '#ffffff', 25);
-              idsToRemove.push(z.id);
             }
           }
 
