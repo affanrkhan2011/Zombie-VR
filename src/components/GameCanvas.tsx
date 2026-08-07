@@ -40,11 +40,33 @@ const ORANGE_BOSS_SPAWN = { x: -12, z: 0 };
 // BLUE PLAYER SPAWN POINT (from map diagram)
 const BLUE_PLAYER_SPAWN = { x: 2, y: 1.6, z: -1 };
 
-// Spacious open arena with zero tight gaps or corners
-const MAP_WALLS = [
-  // Two isolated small pillars for light cover with massive 360-degree clearance
-  { x: -6, z: -5, width: 2.0, depth: 2.0 },
-  { x: 6, z: 5, width: 2.0, depth: 2.0 },
+interface MapWall {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  rotY?: number;
+}
+
+// Solid Interior Walls with wide, spacious gaps and no tight pinch points
+const MAP_WALLS: MapWall[] = [
+  // Top-Left Barrier (shortened and well-spaced)
+  { x: -8, z: -7, width: 6.0, depth: 0.5 },
+  { x: -5, z: -4, width: 0.5, depth: 4.0 },
+
+  // Top-Right Barrier
+  { x: 5, z: -7, width: 6.0, depth: 0.5 },
+  { x: 8, z: -5, width: 0.5, depth: 4.0 },
+
+  // Center Barrier (short and open on all sides)
+  { x: 0, z: -2, width: 4.0, depth: 0.5 },
+
+  // Bottom-Left Barrier
+  { x: -8, z: 6, width: 6.0, depth: 0.5 },
+  { x: -5, z: 3, width: 0.5, depth: 4.0 },
+
+  // Bottom-Right Barrier
+  { x: 6, z: 5, width: 4.0, depth: 0.5 },
 ];
 
 // GREEN RELOAD ZONE CENTER & RADIUS
@@ -528,12 +550,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const roomHeight = 7;
     environmentMeshesRef.current = [];
 
-    // Floor
+    // Floor (Warm Hardwood Parquet tone)
     const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize, 32, 32);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x22252e,
-      roughness: 0.8,
-      metalness: 0.2,
+      color: 0x4a2c16,
+      roughness: 0.6,
+      metalness: 0.1,
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -541,24 +563,28 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     scene.add(floor);
     environmentMeshesRef.current.push(floor);
 
-    // Grid helper on floor
-    const gridHelper = new THREE.GridHelper(roomSize, 30, 0x556677, 0x333b47);
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
+    // Subtle Persian / Library Rug in center
+    const rugGeo = new THREE.PlaneGeometry(10, 10);
+    const rugMat = new THREE.MeshStandardMaterial({ color: 0x5a1818, roughness: 0.9 });
+    const rug = new THREE.Mesh(rugGeo, rugMat);
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = 0.02;
+    rug.receiveShadow = true;
+    scene.add(rug);
 
     // Ceiling
     const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
-    const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x11131a, roughness: 0.9 });
+    const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x1a120b, roughness: 0.9 });
     const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = roomHeight;
     scene.add(ceiling);
 
-    // 4 Outer Boundary Walls
+    // 4 Outer Boundary Walls (Wood-paneled library walls)
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x2d333f,
-      roughness: 0.6,
-      metalness: 0.3,
+      color: 0x332211,
+      roughness: 0.7,
+      metalness: 0.2,
     });
 
     const wallGeos = [
@@ -575,30 +601,149 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wall.receiveShadow = true;
       scene.add(wall);
       environmentMeshesRef.current.push(wall);
+
+      // Add framed paintings and antique maps on each wall
+      const wallGroup = new THREE.Group();
+      wallGroup.position.set(w.pos[0], w.pos[1], w.pos[2]);
+      wallGroup.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
+
+      const artPieces = [
+        { x: -5, y: 0.5, w: 2.2, h: 1.6, frameColor: 0x5a4a32, canvasColor: 0xd4c39e }, // old map parchment
+        { x: 3, y: 0.8, w: 1.5, h: 2.0, frameColor: 0x221100, canvasColor: 0x803322 }, // oil painting
+        { x: 7, y: -0.2, w: 1.8, h: 1.4, frameColor: 0x443322, canvasColor: 0x224466 }, // seascape painting
+      ];
+
+      artPieces.forEach(art => {
+        const artGroup = new THREE.Group();
+        artGroup.position.set(art.x, art.y, 0.05);
+
+        // Frame
+        const frameMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(art.w + 0.15, art.h + 0.15, 0.08),
+          new THREE.MeshStandardMaterial({ color: art.frameColor, roughness: 0.4 })
+        );
+        artGroup.add(frameMesh);
+
+        // Canvas / Painting
+        const canvasMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(art.w, art.h),
+          new THREE.MeshStandardMaterial({ color: art.canvasColor, roughness: 0.8 })
+        );
+        canvasMesh.position.z = 0.05;
+        artGroup.add(canvasMesh);
+
+        wallGroup.add(artGroup);
+      });
+
+      scene.add(wallGroup);
     });
 
-    // SOLID INTERIOR WALL BARRIERS (from diagram) WITH GLOWING WHITE CAP STRIPS
-    const interiorWallMat = new THREE.MeshStandardMaterial({
-      color: 0x3f4656,
-      roughness: 0.5,
-      metalness: 0.4,
+    // BOOKSHELVES (Replacing interior walls)
+    const woodMat = new THREE.MeshStandardMaterial({
+      color: 0x4a2e18, // warm mahogany wood
+      roughness: 0.6,
+      metalness: 0.1,
     });
 
-    const glowCapMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const bookColors = [0x990000, 0x003366, 0x006633, 0x663300, 0x660066, 0x996600, 0x884400, 0x993333];
+
     MAP_WALLS.forEach((w) => {
-      const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(w.width, 3.5, w.depth), interiorWallMat);
-      wallMesh.position.set(w.x, 1.75, w.z);
-      if (w.rotY) wallMesh.rotation.y = w.rotY;
-      wallMesh.castShadow = true;
-      wallMesh.receiveShadow = true;
-      scene.add(wallMesh);
-      environmentMeshesRef.current.push(wallMesh);
+      const shelfGroup = new THREE.Group();
+      shelfGroup.position.set(w.x, 0, w.z);
+      if (w.rotY) shelfGroup.rotation.y = w.rotY;
 
-      // Glowing White Cap Strip on top of each wall
-      const glowCap = new THREE.Mesh(new THREE.BoxGeometry(w.width + 0.1, 0.12, w.depth + 0.1), glowCapMat);
-      glowCap.position.set(w.x, 3.52, w.z);
-      if (w.rotY) glowCap.rotation.y = w.rotY;
-      scene.add(glowCap);
+      const cabinetHeight = 3.5;
+      const mainBox = new THREE.Mesh(
+        new THREE.BoxGeometry(w.width, cabinetHeight, w.depth),
+        woodMat
+      );
+      mainBox.position.y = cabinetHeight / 2;
+      mainBox.castShadow = true;
+      mainBox.receiveShadow = true;
+      shelfGroup.add(mainBox);
+      environmentMeshesRef.current.push(mainBox);
+
+      const isLongWidth = w.width >= w.depth;
+      const span = isLongWidth ? w.width : w.depth;
+      const thickness = isLongWidth ? w.depth : w.width;
+
+      // Add shelf tiers and colorful book blocks
+      [0.9, 1.75, 2.6].forEach(shelfY => {
+        const shelfBoard = new THREE.Mesh(
+          new THREE.BoxGeometry(w.width - 0.1, 0.08, w.depth - 0.1),
+          woodMat
+        );
+        shelfBoard.position.y = shelfY;
+        shelfGroup.add(shelfBoard);
+
+        const numBooks = Math.floor(span * 2.2);
+        const bookWidthTotal = span - 0.4;
+        const step = bookWidthTotal / numBooks;
+
+        for (let i = 0; i < numBooks; i++) {
+          const bWidth = 0.1 + Math.random() * 0.12;
+          const bHeight = 0.55 + Math.random() * 0.25;
+          const bDepth = 0.32 + Math.random() * 0.1;
+          const bColor = bookColors[Math.floor(Math.random() * bookColors.length)];
+          const bookMat = new THREE.MeshStandardMaterial({ color: bColor, roughness: 0.5 });
+          const book = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), bookMat);
+
+          const offsetLocalX = -span / 2 + 0.3 + i * step + step / 2;
+          if (isLongWidth) {
+            book.position.set(offsetLocalX, shelfY + bHeight / 2, thickness / 2 - 0.02);
+          } else {
+            book.position.set(thickness / 2 - 0.02, shelfY + bHeight / 2, offsetLocalX);
+            book.rotation.y = Math.PI / 2;
+          }
+          shelfGroup.add(book);
+        }
+      });
+
+      scene.add(shelfGroup);
+    });
+
+    // Library Study Tables with Lamps
+    const tableMat = new THREE.MeshStandardMaterial({ color: 0x3b220c, roughness: 0.5 });
+    const tablePositions = [
+      { x: 0, z: 3.5 },
+    ];
+    tablePositions.forEach(tp => {
+      const tableGroup = new THREE.Group();
+      tableGroup.position.set(tp.x, 0, tp.z);
+
+      // Tabletop
+      const topMesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.4), tableMat);
+      topMesh.position.y = 0.9;
+      topMesh.castShadow = true;
+      topMesh.receiveShadow = true;
+      tableGroup.add(topMesh);
+
+      // Legs
+      [[-1.1, -0.6], [1.1, -0.6], [-1.1, 0.6], [1.1, 0.6]].forEach(legPos => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.9), tableMat);
+        leg.position.set(legPos[0], 0.45, legPos[1]);
+        leg.castShadow = true;
+        tableGroup.add(leg);
+      });
+
+      // Desk lamp
+      const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.08), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
+      lampBase.position.set(0, 0.94, 0);
+      tableGroup.add(lampBase);
+
+      const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
+      lampPole.position.set(0, 1.17, 0);
+      tableGroup.add(lampPole);
+
+      const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x114422, roughness: 0.3 })); // classic green banker's lamp shade
+      lampShade.position.set(0, 1.35, 0);
+      tableGroup.add(lampShade);
+
+      const deskLight = new THREE.PointLight(0xffeedd, 1.0, 3);
+      deskLight.position.set(0, 1.25, 0);
+      tableGroup.add(deskLight);
+
+      scene.add(tableGroup);
     });
 
     // BLUE PLAYER SPAWN POINT MARKER (Center-Right) - Vibrant Blue Glow
