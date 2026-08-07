@@ -40,27 +40,11 @@ const ORANGE_BOSS_SPAWN = { x: -12, z: 0 };
 // BLUE PLAYER SPAWN POINT (from map diagram)
 const BLUE_PLAYER_SPAWN = { x: 2, y: 1.6, z: -1 };
 
-// Solid Interior Walls with wider spaced gaps to prevent getting stuck
+// Spacious open arena with zero tight gaps or corners
 const MAP_WALLS = [
-  // Top-Left L-Wall Structure
-  { x: -9.5, z: -6, width: 8.0, depth: 0.5 },
-  { x: -5, z: -3, width: 0.5, depth: 5.5 },
-
-  // Top-Right Structure
-  { x: 3.5, z: -7, width: 8.0, depth: 0.5 },
-  { x: 8, z: -8.5, width: 0.5, depth: 6 },
-  { x: 9.8, z: -2.5, width: 0.5, depth: 4.5, rotY: Math.PI / 6 }, // Slanted wall
-
-  // Center T-Wall
-  { x: 0, z: -1.5, width: 0.5, depth: 4.5 },
-  { x: -0.5, z: 1, width: 6.0, depth: 0.5 },
-
-  // Bottom-Left Structure
-  { x: -9.5, z: 5, width: 8.0, depth: 0.5 },
-  { x: -3, z: 8.5, width: 0.5, depth: 6 },
-
-  // Bottom-Right Angled Wall (position adjusted to not overlap green zone circle)
-  { x: 5.5, z: 6.5, width: 0.5, depth: 4.5, rotY: -Math.PI / 4 }, // Slanted wall
+  // Two isolated small pillars for light cover with massive 360-degree clearance
+  { x: -6, z: -5, width: 2.0, depth: 2.0 },
+  { x: 6, z: 5, width: 2.0, depth: 2.0 },
 ];
 
 // GREEN RELOAD ZONE CENTER & RADIUS
