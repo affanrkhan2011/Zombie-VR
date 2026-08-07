@@ -73,6 +73,43 @@ const isInGreenZone = (px: number, pz: number) => {
   return (dx * dx + dz * dz) <= (GREEN_ZONE_RADIUS * GREEN_ZONE_RADIUS);
 };
 
+const checkCollision = (pos: { x: number; z: number }, radius: number = 0.5, isZombie: boolean = false): boolean => {
+  for (const w of MAP_WALLS) {
+    let px = pos.x - w.x;
+    let pz = pos.z - w.z;
+
+    if (w.rotY) {
+      const cos = Math.cos(-w.rotY);
+      const sin = Math.sin(-w.rotY);
+      const rx = px * cos - pz * sin;
+      const rz = px * sin + pz * cos;
+      px = rx;
+      pz = rz;
+    }
+
+    const halfW = w.width / 2;
+    const halfD = w.depth / 2;
+    const closestX = THREE.MathUtils.clamp(px, -halfW, halfW);
+    const closestZ = THREE.MathUtils.clamp(pz, -halfD, halfD);
+
+    const dx = px - closestX;
+    const dz = pz - closestZ;
+    if ((dx * dx + dz * dz) < radius * radius) {
+      return true;
+    }
+  }
+
+  if (isZombie) {
+    const dx = pos.x - GREEN_ZONE_CENTER.x;
+    const dz = pos.z - GREEN_ZONE_CENTER.z;
+    if ((dx * dx + dz * dz) < (GREEN_ZONE_RADIUS + radius) * (GREEN_ZONE_RADIUS + radius)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 // Helper function to resolve player/zombie collisions against solid interior walls
 const resolveMapCollisions = (pos: { x: number; z: number }, radius: number = 0.5, isZombie: boolean = false) => {
   MAP_WALLS.forEach(w => {
@@ -1375,8 +1412,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           meshGroup.lookAt(playerPos.x, meshGroup.position.y, playerPos.z);
 
           if (distToPlayer > z.radius) {
-            z.position[0] += dirToPlayer.x * z.speed * delta;
-            z.position[2] += dirToPlayer.z * z.speed * delta;
+            const step = z.speed * delta;
+            const baseAngle = Math.atan2(dirToPlayer.x, dirToPlayer.z);
+            const angles = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6];
+            let bestDir = dirToPlayer.clone();
+            let minDstToPlayer = Infinity;
+
+            for (const aOffset of angles) {
+              const testAngle = baseAngle + aOffset;
+              const testDir = new THREE.Vector3(Math.sin(testAngle), 0, Math.cos(testAngle));
+              const testPos = {
+                x: z.position[0] + testDir.x * step,
+                z: z.position[2] + testDir.z * step,
+              };
+
+              if (!checkCollision(testPos, z.radius, true)) {
+                const dToPlayer = Math.hypot(testPos.x - playerPos.x, testPos.z - playerPos.z);
+                if (dToPlayer < minDstToPlayer) {
+                  minDstToPlayer = dToPlayer;
+                  bestDir = testDir;
+                }
+              }
+            }
+
+            z.position[0] += bestDir.x * step;
+            z.position[2] += bestDir.z * step;
 
             const tempPos = { x: z.position[0], z: z.position[2] };
             resolveMapCollisions(tempPos, z.radius, true);
