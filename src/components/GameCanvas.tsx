@@ -226,7 +226,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const totalWaveZombiesRef = useRef<number>(0);
   const spawnedWaveZombiesRef = useRef<number>(0);
   const killedWaveZombiesRef = useRef<number>(0);
-  const hasSpawnedBossInWaveRef = useRef<boolean>(false);
+  const bossesSpawnedInWaveRef = useRef<number>(0);
+  const targetBossesInWaveRef = useRef<number>(0);
   const heartbeatTimerRef = useRef<number>(0);
   const lastSpatialGroanTimeRef = useRef<number>(0);
 
@@ -445,13 +446,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     spawnedWaveZombiesRef.current = 0;
     killedWaveZombiesRef.current = 0;
-    hasSpawnedBossInWaveRef.current = false;
+    bossesSpawnedInWaveRef.current = 0;
     reloadTimeRef.current = 0;
 
     if (mode === 'PLAY') {
-      // Calculate zombies for this wave (includes Boss if wave % 3 === 0)
+      const isBossWave = wave % 3 === 0;
+      const numBosses = isBossWave ? Math.floor(wave / 3) : 0;
+      targetBossesInWaveRef.current = numBosses;
       const baseZombies = 5 + wave * 4;
-      totalWaveZombiesRef.current = wave % 3 === 0 ? baseZombies + 1 : baseZombies;
+      totalWaveZombiesRef.current = baseZombies + numBosses;
     } else if (mode === 'PRACTICE') {
       spawnPracticeTargets();
     }
@@ -921,11 +924,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const spawnZombieInWave = () => {
     if (spawnedWaveZombiesRef.current >= totalWaveZombiesRef.current) return;
 
-    const isBossWave = wave % 3 === 0;
     let isBossToSpawn = false;
-    if (isBossWave && !hasSpawnedBossInWaveRef.current) {
+    if (bossesSpawnedInWaveRef.current < targetBossesInWaveRef.current) {
       isBossToSpawn = true;
-      hasSpawnedBossInWaveRef.current = true;
+      bossesSpawnedInWaveRef.current++;
     }
 
     let x = 0;
@@ -936,8 +938,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     let damage = 10;
 
     if (isBossToSpawn) {
-      // Boss Spawns at Orange Star (-12, 0)
-      x = ORANGE_BOSS_SPAWN.x;
+      // Boss Spawns around Orange Star (-12, 0) with slight offsets if multiple
+      const offset = (bossesSpawnedInWaveRef.current - 1) * 2.0;
+      x = ORANGE_BOSS_SPAWN.x + offset;
       z = ORANGE_BOSS_SPAWN.z;
       type = 'BOSS';
       speed = 1.1 + wave * 0.05;
