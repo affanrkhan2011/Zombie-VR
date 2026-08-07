@@ -379,6 +379,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -667,36 +669,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const span = isLongWidth ? w.width : w.depth;
       const thickness = isLongWidth ? w.depth : w.width;
 
-      // Add shelf tiers and colorful book blocks
+      // Add shelf tiers and double-sided colorful book blocks
       [0.9, 1.75, 2.6].forEach(shelfY => {
         const shelfBoard = new THREE.Mesh(
           new THREE.BoxGeometry(w.width - 0.1, 0.08, w.depth - 0.1),
           woodMat
         );
         shelfBoard.position.y = shelfY;
+        shelfBoard.castShadow = true;
+        shelfBoard.receiveShadow = true;
         shelfGroup.add(shelfBoard);
 
         const numBooks = Math.floor(span * 2.2);
         const bookWidthTotal = span - 0.4;
         const step = bookWidthTotal / numBooks;
 
-        for (let i = 0; i < numBooks; i++) {
-          const bWidth = 0.1 + Math.random() * 0.12;
-          const bHeight = 0.55 + Math.random() * 0.25;
-          const bDepth = 0.32 + Math.random() * 0.1;
-          const bColor = bookColors[Math.floor(Math.random() * bookColors.length)];
-          const bookMat = new THREE.MeshStandardMaterial({ color: bColor, roughness: 0.5 });
-          const book = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), bookMat);
+        // Generate on both sides (front and back) for double-sided bookshelves
+        [-1, 1].forEach(sideMultiplier => {
+          for (let i = 0; i < numBooks; i++) {
+            const bWidth = 0.1 + Math.random() * 0.12;
+            const bHeight = 0.55 + Math.random() * 0.25;
+            const bDepth = 0.32 + Math.random() * 0.1;
+            const bColor = bookColors[Math.floor(Math.random() * bookColors.length)];
+            const bookMat = new THREE.MeshStandardMaterial({ color: bColor, roughness: 0.5 });
+            const book = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), bookMat);
+            book.castShadow = true;
 
-          const offsetLocalX = -span / 2 + 0.3 + i * step + step / 2;
-          if (isLongWidth) {
-            book.position.set(offsetLocalX, shelfY + bHeight / 2, thickness / 2 - 0.02);
-          } else {
-            book.position.set(thickness / 2 - 0.02, shelfY + bHeight / 2, offsetLocalX);
-            book.rotation.y = Math.PI / 2;
+            const offsetLocalX = -span / 2 + 0.3 + i * step + step / 2;
+            if (isLongWidth) {
+              book.position.set(offsetLocalX, shelfY + bHeight / 2, sideMultiplier * (thickness / 2 - 0.02));
+            } else {
+              book.position.set(sideMultiplier * (thickness / 2 - 0.02), shelfY + bHeight / 2, offsetLocalX);
+              book.rotation.y = Math.PI / 2;
+            }
+            shelfGroup.add(book);
           }
-          shelfGroup.add(book);
-        }
+        });
       });
 
       scene.add(shelfGroup);
@@ -839,33 +847,87 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const createGunModel = (): THREE.Group => {
     const gun = new THREE.Group();
 
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.8 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 });
-    const redMat = new THREE.MeshBasicMaterial({ color: 0xCC5200 });
+    // High quality materials
+    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.3, metalness: 0.85 });
+    const silverMetal = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.2, metalness: 0.9 });
+    const accentMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.2, emissive: 0x1d4ed8, emissiveIntensity: 0.6 }); // glowing blue accent
+    const gripMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.1, transparent: true, opacity: 0.8, emissive: 0x0891b2 });
 
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.55), metalMat);
-    gun.add(barrel);
+    // Main receiver / body
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.11, 0.5), darkMetal);
+    receiver.position.set(0, 0, -0.05);
+    receiver.castShadow = true;
+    gun.add(receiver);
 
-    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.08, 0.5), metalMat);
-    slide.position.set(0, 0.06, -0.02);
-    gun.add(slide);
+    // Top tactical rail
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.45), silverMetal);
+    topRail.position.set(0, 0.07, -0.05);
+    gun.add(topRail);
 
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.12), darkMat);
-    grip.position.set(0, -0.14, 0.15);
-    grip.rotation.x = -0.3;
+    // Optic Scope / Sight
+    const scopeBody = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.18, 16), darkMetal);
+    scopeBody.rotation.x = Math.PI / 2;
+    scopeBody.position.set(0, 0.12, -0.1);
+    gun.add(scopeBody);
+
+    const scopeLensFront = new THREE.Mesh(new THREE.CircleGeometry(0.024, 16), glassMat);
+    scopeLensFront.position.set(0, 0.12, -0.19);
+    gun.add(scopeLensFront);
+
+    const scopeLensBack = new THREE.Mesh(new THREE.CircleGeometry(0.024, 16), glassMat);
+    scopeLensBack.position.set(0, 0.12, -0.01);
+    scopeLensBack.rotation.y = Math.PI;
+    gun.add(scopeLensBack);
+
+    // Barrel shroud & extended barrel
+    const barrelShroud = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.35), darkMetal);
+    barrelShroud.position.set(0, 0.02, -0.35);
+    barrelShroud.castShadow = true;
+    gun.add(barrelShroud);
+
+    const barrelTip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.12, 16), silverMetal);
+    barrelTip.rotation.x = Math.PI / 2;
+    barrelTip.position.set(0, 0.02, -0.52);
+    gun.add(barrelTip);
+
+    // Muzzle brake ports
+    const brakeRing1 = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.005, 8, 16), darkMetal);
+    brakeRing1.rotation.x = Math.PI / 2;
+    brakeRing1.position.set(0, 0.02, -0.48);
+    gun.add(brakeRing1);
+
+    // Ergonomic grip
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.24, 0.13), gripMat);
+    grip.position.set(0, -0.15, 0.16);
+    grip.rotation.x = -0.32;
+    grip.castShadow = true;
     gun.add(grip);
 
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.1), metalMat);
-    guard.position.set(0, -0.08, 0.05);
-    gun.add(guard);
+    // Trigger guard & trigger
+    const triggerGuard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.08), silverMetal);
+    triggerGuard.position.set(0, -0.09, 0.06);
+    gun.add(triggerGuard);
 
-    const laserBox = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.12), darkMat);
-    laserBox.position.set(0, -0.07, -0.18);
-    gun.add(laserBox);
+    const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.03), silverMetal);
+    trigger.position.set(0, -0.08, 0.08);
+    gun.add(trigger);
 
-    const laserLens = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), redMat);
-    laserLens.position.set(0, -0.07, -0.24);
-    gun.add(laserLens);
+    // Magazine housing & mag
+    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.22, 0.11), darkMetal);
+    magazine.position.set(0, -0.14, -0.05);
+    magazine.rotation.x = 0.15;
+    magazine.castShadow = true;
+    gun.add(magazine);
+
+    // Glowing energy side strips (sci-fi library blaster flair)
+    const stripRight = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.02, 0.38), accentMat);
+    stripRight.position.set(0.036, 0.02, -0.06);
+    gun.add(stripRight);
+
+    const stripLeft = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.02, 0.38), accentMat);
+    stripLeft.position.set(-0.036, 0.02, -0.06);
+    gun.add(stripLeft);
 
     return gun;
   };
