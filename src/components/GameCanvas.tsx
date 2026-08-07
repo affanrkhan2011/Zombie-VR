@@ -427,7 +427,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Laser Beam
     const laserMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(settings.laserColor || '#CC5200'),
+      color: new THREE.Color(settings.laserColor || '#3b82f6'),
       transparent: true,
       opacity: 0.85,
     });
@@ -472,7 +472,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Update Laser Color
   useEffect(() => {
     if (laserMeshRef.current) {
-      const col = new THREE.Color(settings.laserColor || '#CC5200');
+      const col = new THREE.Color(settings.laserColor || '#3b82f6');
       (laserMeshRef.current.material as THREE.MeshBasicMaterial).color = col;
     }
     soundManager.setMuted(!settings.soundEnabled);
@@ -1421,7 +1421,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (envIntersects.length > 0) {
         hitSomething = true;
         const hit = envIntersects[0];
-        createExplosionParticles(hit.point, '#94a3b8', 12);
+        createExplosionParticles(hit.point, '#3b82f6', 12);
       }
     }
 
@@ -1667,7 +1667,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               soundManager.playZombieAttack();
               onPlayerHit(z.damage);
 
-              createExplosionParticles(meshGroup.position, '#ffffff', 25);
+              createExplosionParticles(meshGroup.position, '#CC5200', 25);
             }
           }
 
@@ -1804,7 +1804,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       </div>
 
       {/* VIRTUAL JOYSTICK (BOTTOM LEFT) */}
-      {!isPaused && (
+      {!isPaused && hp > 0 && (
         <div
           className="absolute bottom-6 left-6 z-30 pointer-events-auto touch-none select-none flex items-center justify-center p-2"
           onPointerDown={handleJoystickPointerDown}
