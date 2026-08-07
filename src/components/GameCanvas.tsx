@@ -40,27 +40,27 @@ const ORANGE_BOSS_SPAWN = { x: -12, z: 0 };
 // BLUE PLAYER SPAWN POINT (from map diagram)
 const BLUE_PLAYER_SPAWN = { x: 2, y: 1.6, z: -1 };
 
-// Solid Interior Walls matching the diagram provided by user
+// Solid Interior Walls with wider spaced gaps to prevent getting stuck
 const MAP_WALLS = [
   // Top-Left L-Wall Structure
-  { x: -9.5, z: -6, width: 9, depth: 0.5 },
-  { x: -5, z: -3, width: 0.5, depth: 6.5 },
+  { x: -9.5, z: -6, width: 8.0, depth: 0.5 },
+  { x: -5, z: -3, width: 0.5, depth: 5.5 },
 
   // Top-Right Structure
-  { x: 3.5, z: -7, width: 9, depth: 0.5 },
-  { x: 8, z: -8.5, width: 0.5, depth: 7 },
-  { x: 9.8, z: -2.5, width: 0.5, depth: 5, rotY: Math.PI / 6 }, // Slanted wall
+  { x: 3.5, z: -7, width: 8.0, depth: 0.5 },
+  { x: 8, z: -8.5, width: 0.5, depth: 6 },
+  { x: 9.8, z: -2.5, width: 0.5, depth: 4.5, rotY: Math.PI / 6 }, // Slanted wall
 
   // Center T-Wall
-  { x: 0, z: -1.5, width: 0.5, depth: 5 },
-  { x: -0.5, z: 1, width: 7, depth: 0.5 },
+  { x: 0, z: -1.5, width: 0.5, depth: 4.5 },
+  { x: -0.5, z: 1, width: 6.0, depth: 0.5 },
 
   // Bottom-Left Structure
-  { x: -9.5, z: 5, width: 9, depth: 0.5 },
-  { x: -3, z: 8.5, width: 0.5, depth: 7 },
+  { x: -9.5, z: 5, width: 8.0, depth: 0.5 },
+  { x: -3, z: 8.5, width: 0.5, depth: 6 },
 
   // Bottom-Right Angled Wall (position adjusted to not overlap green zone circle)
-  { x: 5.5, z: 6.5, width: 0.5, depth: 5, rotY: -Math.PI / 4 }, // Slanted wall
+  { x: 5.5, z: 6.5, width: 0.5, depth: 4.5, rotY: -Math.PI / 4 }, // Slanted wall
 ];
 
 // GREEN RELOAD ZONE CENTER & RADIUS
@@ -240,6 +240,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     corner1: THREE.PointLight;
     corner2: THREE.PointLight;
   } | null>(null);
+
+  const environmentMeshesRef = useRef<THREE.Mesh[]>([]);
 
   // Game state refs inside loop
   const zombiesRef = useRef<Zombie[]>([]);
@@ -540,6 +542,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const buildRoomEnvironment = (scene: THREE.Scene) => {
     const roomSize = 30;
     const roomHeight = 7;
+    environmentMeshesRef.current = [];
 
     // Floor
     const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize, 32, 32);
@@ -552,6 +555,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
+    environmentMeshesRef.current.push(floor);
 
     // Grid helper on floor
     const gridHelper = new THREE.GridHelper(roomSize, 30, 0x556677, 0x333b47);
@@ -586,6 +590,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wall.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
       wall.receiveShadow = true;
       scene.add(wall);
+      environmentMeshesRef.current.push(wall);
     });
 
     // SOLID INTERIOR WALL BARRIERS (from diagram) WITH GLOWING WHITE CAP STRIPS
@@ -603,6 +608,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
       scene.add(wallMesh);
+      environmentMeshesRef.current.push(wallMesh);
 
       // Glowing White Cap Strip on top of each wall
       const glowCap = new THREE.Mesh(new THREE.BoxGeometry(w.width + 0.1, 0.12, w.depth + 0.1), glowCapMat);
@@ -1216,6 +1222,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             if (targetGroup) targetGroup.rotation.x = 0;
           }, 300);
         }
+      }
+    }
+
+    if (!hitSomething && environmentMeshesRef.current.length > 0) {
+      const envIntersects = raycaster.intersectObjects(environmentMeshesRef.current, true);
+      if (envIntersects.length > 0) {
+        hitSomething = true;
+        const hit = envIntersects[0];
+        createExplosionParticles(hit.point, '#94a3b8', 12);
       }
     }
 
