@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameMode, GameSettings } from '../types';
-import { Play, Coins, Gem, Headphones, Crosshair, Smartphone } from 'lucide-react';
+import { Play, Headphones, Crosshair, Smartphone } from 'lucide-react';
 import { soundManager } from '../utils/audio';
 
 interface HomeScreenProps {
@@ -97,18 +97,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           <span className="font-mono text-xs sm:text-sm text-gray-300 uppercase tracking-wider font-bold">How to Play</span>
         </button>
-
-        {/* Right: Currency (Hidden on very small screens) */}
-        <div className="hidden sm:flex gap-6 bg-[#0D1F12]/80 px-6 py-2 rounded-sm border border-[#CC5200]/20 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-yellow-500" />
-            <span className="font-mono text-sm text-yellow-100 font-bold">12.4K</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Gem className="w-4 h-4 text-purple-400" />
-            <span className="font-mono text-sm text-purple-100 font-bold">340</span>
-          </div>
-        </div>
       </div>
 
 

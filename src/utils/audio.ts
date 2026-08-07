@@ -26,11 +26,13 @@ class SoundManager {
     if (typeof window !== 'undefined') {
       const handleFirstInteraction = () => {
         this.startBGM();
-        window.removeEventListener('pointerdown', handleFirstInteraction);
-        window.removeEventListener('keydown', handleFirstInteraction);
+        ['click', 'pointerdown', 'keydown', 'touchstart'].forEach(e => 
+          window.removeEventListener(e, handleFirstInteraction)
+        );
       };
-      window.addEventListener('pointerdown', handleFirstInteraction);
-      window.addEventListener('keydown', handleFirstInteraction);
+      ['click', 'pointerdown', 'keydown', 'touchstart'].forEach(e => 
+        window.addEventListener(e, handleFirstInteraction)
+      );
     }
   }
 
@@ -157,7 +159,7 @@ class SoundManager {
   }
 
   // Zombie Groan / Screech
-  public playZombieGroan(pitchMultiplier: number = 1.0) {
+  public playZombieGroan(pitchMultiplier: number = 1.0) { return;
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
@@ -198,7 +200,7 @@ class SoundManager {
   }
 
   // Zombie Attack / Bite sound
-  public playZombieAttack() {
+  public playZombieAttack() { return;
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
@@ -312,7 +314,7 @@ class SoundManager {
   }
 
   // Zombie Death Splat Sound
-  public playZombieHit() {
+  public playZombieHit() { return;
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
@@ -419,7 +421,8 @@ class SoundManager {
     playerPos: { x: number; y: number; z: number },
     yaw: number,
     type: 'WALKER' | 'RUNNER' | 'TANK' | 'STALKER' = 'WALKER'
-  ) {
+  ) { 
+    return;
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
